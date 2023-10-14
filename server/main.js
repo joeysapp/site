@@ -1,58 +1,58 @@
-// Global event system (DB closing, sockets disconnecting, etc.)
-import Emitter from './services/events-emitters.js';
+import { env } from 'node:process';
+const { SITE_HTTPS_PORT = 443 } = env;
 
-// Process
-import Files from './services/files.js';
-import Database from './services/db.js';
-import HttpServer from './services/http.js';
+import {
+  RootEmitter,
+  Files,
+  // Database,
+  HttpsServer,
+} from './services/index.js';
 
-// WIP stuff
-import Controllers from './services/controllers.js';
-import Scrapers from './services/scrapers.js';
-import Serials from './services/serials.js';
-import Socks from './socks/connection.js';
+import {
+  log, fg, what, numToBytes,
+  show_sockets, show_network_layers, show_http, show_init, show_files, show_time,
+} from './utils//index.mjs';
+// show_network_layers();
+show_sockets();
+show_http();
+show_init();
+show_files();
+// show_time();
 
-// Utils
-import what from './lib/common/utils/what-server.mjs'; import log from './lib/common/utils/log.mjs';
+function RootServer() {
+  let id = 'RootServer';
+  let siteUsers = [];
 
-const RootEmitter = new Emitter();
-export default RootEmitter;
+  let server = new HttpsServer({
+    id,
+    port: SITE_HTTPS_PORT,
+    onRequest: function(request, response, netSocket) {
+      let { url, method, headers } = request;    
+      log(id, 'request', `${method.toLowerCase()} ${url}`);
 
+      // [todo] This should be a thennable, but it's just piping to response and holding in memcache for now.
+      files.getFile(request, response);
+    },
+    onSocketRead: function(netSocket, readData = {}) {
+      let { data, headers, signature } = readData;
+      if (signature) {
+        log(`${id}.NetSocket.read.signature`, `${what(signature)}`);
+      }
+      if (headers) {
+        log(`${id}.NetSocket.read.headers`, `\n${what(headers)}`);
+      }
+      if (data) {
+        log(`${id}.NetSocket.read.data`, `\n${what(data)}`);
+      }
+    },
+    onSocketClose: function(netSocket, data) {
+      log(`${id}.NetSocket.close`, `${netSocket.net_socket_id} [ data/headers present ]`);
+    },
+  });
+}
+
+// Startup
+const rootServer = RootServer();
 const files = new Files();
-const db = new Database();
-const socks = new Socks();
+console.log(fg([25, 180, 222], 'boot'));
 
-// WIP stuff
-const controllers = new Controllers();
-const serials = new Serials();
-const scrapers = new Scrapers();
-
-// [todo] The repl should just go here?
-setTimeout(() => {
-  // scrapers.wikiMediaScrape();
-  // scrapers.wikiMediaShow();
-
-  log('server.js', 'todos', `\n${what([
-     'Do some vague planning to have HTTP/S servers do scraping/trawling',
-     'Sending bytes to Arduinos',
-     'Multibroadcast UDP stuff',
-     'HTTPS/TLS',
-     'R/W/NEW tables',
-     'Logging improvements, e.g. where does localAddress/remotePort actually go (node/blessed??) (also, is LAYERS/ID really the best way?0',
-     'Having a shared services/netsocket that inherits everything from services/eventsemitter, etc.\n\tORRRRRRRRR just understanding it and manually defining stuff for now.',
-     'Understanding anonymous functions vs named functions, performance, securtiy.',
-     'REPL',
-     'Utilizing/impl of Streams, how to handle things like request/responses themselves having events [ HTTPS changes this I bet ]',
-   ])}`);
-  serials.init();
-  
-}, 500);
-
-// TCP Server listening for HTTP UPGRADE, changes application to WebSocket.
-const socksServer = new HttpServer({ port: 9001 });
-socksServer.addListener('upgrade', function(request, socket, head) {
-  socks.handleUpgrade(request, socket); 
-});
-
-// While using webpackDevServer we're proxying out files through staticServer
-const staticServer = new HttpServer({ port: 80 });

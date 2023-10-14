@@ -1,0 +1,7 @@
+{
+  "type": "module",
+  "dependencies": {
+    "pg": "^8.8.0"
+  },
+  "todo": "Improve package.json's import/exports, https://nodejs.org/api/packages.html#determining-module-system"
+}
