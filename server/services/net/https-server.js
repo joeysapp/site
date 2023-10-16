@@ -84,7 +84,10 @@ function HttpsServer({
   _httpsServer.addListener('connection', function(nodeSocket) {
     const { remoteAddress, remotePort, remoteFamily } = nodeSocket;
     const remote = { remoteAddress, remotePort, remoteFamily };
-    log(remote, 'connection');
+
+    // Seeing if it's a TLSv1.3 socket
+    let protocol = nodeSocket.getProtocol();
+    log(remote, `connection protocol=${protocol}`);   
     // Didn't fire.. trying in NetSocket..
     // nodeSocket.once('session', function(session) {
     //   log(remote, 'connection/session', 'omfg the socket.on(sessioned)');
