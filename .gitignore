@@ -1,1 +1,5 @@
-certs
+common
+files
+.env.deploy .env.local
+.env*
+.gitmodules

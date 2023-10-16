@@ -1,4 +1,6 @@
-import { what, log as _log, fg } from '../../utils/index.mjs';
+// import { what, log as _log, fg } from '../../utils/index.mjs';
+const _log = () => {}; const what = () => {}; const fg = () => {}; const bold = () => {}; const numToBytes = () => {};
+
 const NETWORK_LAYERS = {
   application: '?', transport: 'tcp', internet: 'IPv4', link: 'MAC',
   remoteAddress: '', remotePort: '', localAddress: '', localPort: '',

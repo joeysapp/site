@@ -1,19 +1,27 @@
 import https from 'node:https';
 import tls from 'node:tls';
 import fs from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
 
 import NetSocket from './net-socket.js';
-import { what, log as _log } from '../../utils/index.mjs';
+import { what, log as _log } from '../../../common/utils/index.mjs';
+// const _log = () => {}; const what = () => {}; const fg = () => {}; const bold = () => {}; const numToBytes = () => {};
 
+const DEBUG = process.env.DEBUG || false;
 const TLS_OPTIONS = {
-  cert: fs.readFileSync('./certs/joeys.app/cert.pem'),
-  key: fs.readFileSync('./certs/joeys.app/privkey.pem'),
+  cert: fs.readFileSync(path.resolve(process.env.HOME, process.env.ROOT_CERT)),    
+  key: fs.readFileSync(path.resolve(process.env.HOME, process.env.ROOT_KEY)),
   ticketKeys: Buffer.from('foobar'.repeat(8)),
+
 
   requestTimeout: 600,
   handshakeTimeout: 1000, // default is 12000ms
-  keepAlive: true,
-  keepAliveTimeout: 1000 * 60 * 1,
+  // keepAlive: true,
+  // keepAliveTimeout: 1000 * 60 * 1,
+
+  keepAlive: false, // For just simple fileserver stuff, dc sockets.
+  keepAliveTimeout: 1,
   allowHalfOpen: true,
 };
 const NETWORK_LAYERS = {
@@ -22,9 +30,8 @@ const NETWORK_LAYERS = {
 };
 
 function HttpsServer({
-  DEBUG = false,
-  id ,
-  host = '192.168.0.2',
+  id,
+  host,
   port,
 
   onConnection,
@@ -56,7 +63,6 @@ function HttpsServer({
 
   let _httpsServer;
   _httpsServer = https.createServer(TLS_OPTIONS);
-
   const netSockets = {};
   let _id = '${label}<'+`${port}`.padStart(5, ' ')+'-'+`${Object.keys(netSockets).length}`.padStart(3, ' ') +'>';
   log({}, 'init');
@@ -123,11 +129,11 @@ function HttpsServer({
     }, '');
     log({}, 'sessions', `[[ ${Object.keys(store).length} sessions stored ]]`);
   }
-  setInterval(() => {
-    if (Object.keys(store).length) {
-      logStore(store);
-    }
-  }, 10000);
+  // setInterval(() => {
+  //   if (Object.keys(store).length) {
+  //     logStore(store);
+  //   }
+  // }, 10000);
 
   _httpsServer.on('newSession', function(sessionID, sessionData, callback) {
     const nodeSocket = { thisIsHowYouResumeTLS: '[todo]' };
@@ -191,19 +197,22 @@ function HttpsServer({
   _httpsServer.on('tlsClientError', function(exception, tlsSocket) {
     const { remoteAddress, remotePort, remoteFamily } = tlsSocket;
     const remote = { remoteAddress, remotePort, remoteFamily, application: 'tls' };
-    log(remote, 'tlsClientError[TODO]');
+    log(remote, 'tlsClientError[TODO]\n${what(exception)}');
   });
 
   _httpsServer.on('listening', function() { log({}, 'listening'); });
-  _httpsServer.on('close', function() { log({}, 'close'); });
   _httpsServer.on('connect', function() { log({}, 'connect'); });
   _httpsServer.on('checkContinue', (request, response) => { log({}, 'checkContinue'); });
   _httpsServer.on('checkExpectation', (request, response) => { log({}, 'checkExpectation'); });
-  _httpsServer.on('clientError', (error) => { log({}, 'clientError', `${what(error)}`); });
-  _httpsServer.on('dropRequest', (request, socket) => { log({}, 'dropRequest'); });
+  _httpsServer.on('clientError', (error) => { log({}, 'clientError', `\n\n${what(error)}\n\n`); });
+  _httpsServer.on('dropRequest', (request, socket) => { log({}, 'dropRequest(request, socket)'); });
+
   _httpsServer.on('error', function(error) {
-    log({}, 'error', `${what(error)}`);
-    _httpsServer.close();
+    log({}, 'error', `\n\n${what(error, { showHidden: false })}\n\n`);
+    // _httpsServer.close();
+  });
+  _httpsServer.on('close', function() {
+    log({}, 'close', 'httpsServer.error -> closing');
   });
   _httpsServer.listen({
     host,

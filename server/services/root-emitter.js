@@ -1,6 +1,7 @@
 // Global event system for safe shutdowns/restarts
 import { EventEmitter, getEventListeners } from 'node:events';
-import { log, what, fg, bold } from '../utils/index.mjs';
+// import { log, what, fg, bold } from '../utils/index.mjs';
+const log = () => {}; const what = () => {}; const fg = () => {}; const bold = () => {};
 
 function RootEmitter() {
   let _emitter = new EventEmitter();

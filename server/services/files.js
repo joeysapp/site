@@ -44,10 +44,13 @@
 import fs from 'node:fs';
 import { readdir, opendir, open } from 'node:fs/promises';
 import path from 'node:path';
+import process from 'node:process';
 
 // [todo] Figure out handling SIGINT on async ops, do we need child processes writing to files?
 import { RootEmitter } from './index.js';
-import { what, log as _log, numToBytes, fg, bold } from '../utils/index.mjs';
+import { what, log as _log, numToBytes, fg, bold } from '../../common/utils/index.mjs';
+// const _log = () => {}; const what = () => {}; const fg = () => {}; const bold = () => {}; const numToBytes = () => {};
+_log('files', 'what is happening hwy is it exiting');
 
 const STATIC_BASE = "./src/files/";
 const IS_PRODUCTION = false; // handle the webpackDevServer proxy issues
@@ -68,7 +71,8 @@ export function BasePage(string) {
   let str = `
    <html>
    <body style="margin: 0; user-select: none; font-size: max(2vmax, 18px); -webkit-text-size-adjust:foobarnone;">
-     <div style=" display: flex; flex-direction: column; ">
+     <div style="display:flex;flex-direction:column;padding:24px;margin:12px;">
+       ${Header()}
        ${string}
      </div>
    </body>
@@ -77,14 +81,67 @@ export function BasePage(string) {
   return str.toString();
 }
 
+export function Header() {
+  let str = `
+    <div style="display:flex;flex-direction:column;padding:24px 10px 24px 10px;border-bottom:1px solid black;">
+      <div style="display:flex;">
+        <b style="font-size:48px;font-family:sans-serif;">
+          joeys.app
+        </b>
+        <div style="display:flex;flex-direction:column;font-style: italic; margin-left: 12px;">
+           <h4 style="margin:auto;">only a filehost rn but ~encrypted~ :^)</h4>
+        </div>
+      </div>
+      <div style="display: flex;margin-top:24px;font-family:Monaco;monospace;">
+        <div style="margin-left:12px;margin-right:12px;">
+          <a href="/">home</a>
+        </div>
+        <div style="margin-left:12px;margin-right:12px;">
+          <a href=".dir">files</a>
+        </div>
+      </div>
+   </div>
+`;
+  return str.toString();
+}
+
+function getProcessUsage(options = {}, socks) {
+  let msg = {};  
+  let mem = process.memoryUsage();
+  Object.keys(mem).forEach(k => msg[k] = numToBytes(mem[k]) );  
+  let usage = process.resourceUsage();
+  Object.keys(usage).forEach(k => {
+    if (usage[k] !== 0) {
+      msg[k] = usage[k];
+    }
+  });
+  msg.maxRSS = numToBytes(msg.maxRSS);
+  return msg;
+}
+
 export function LandingPage() {
+    let usage = {
+	uptime: `${process.uptime()} seconds`,
+	...getProcessUsage(),
+    };
+    let procString = Object.keys(usage).reduce((acc, key, idx) => {
+	return (`
+          ${acc}
+          <div style="display:flex;width:min(800px, 100vw);">
+            <div style="font-weight:bold;">${key}</div>
+            <div style="">${usage[key]}</div>
+          </div>
+        `);
+    }, '');
+    
   let str = BasePage(`
-    <div style="display:flex;flex-direction:column;padding:32px;">
-      <b style="font-size:48px;font-family:sans-serif;">
-        joeys.app
-      </b>
+    <div style="display:flex;flex-direction:column;font-family:Monaco;monospace;">
+      <br/>
+      <div style="font-weight:normal;display:flex;flex-direction:column;padding:24px 12px 12px 24px;margin-left:auto;margin-right:auto;">
+         ${procString}
+       </div>
     </div>
-`);
+  `);
   return str.toString();
 }
 
@@ -94,7 +151,7 @@ export function ErrorCodePage(code, string) {
       <b style="font-size:48px;font-family:sans-serif;">
         ${code}
       </b>
-     <div style="font-family: monospace">
+     <div style="font-family: Monaco;monospace">
        ${string}
      </div>
     </div>
@@ -104,26 +161,41 @@ export function ErrorCodePage(code, string) {
 }
 
 export function DirectoryPage(topDirs, allDirs, allFiles) {
-  function margin(name, currentDir) {
-    let depth = name.split('/').length;
-    return `margin-left: ${(depth-2)*16}px;`;
+  function margin(idx = 1) {
+      // let depth = name.split('/').length;
+      // if (idx === 0) return '';
+    return `margin-left: ${(idx)*16}px;`;
   }
 
-  function visibleName(filename) {
+    function visibleName(filename, inDir = true) {
     let v = filename;
     let filetype = filename.substring(filename.lastIndexOf('.'));
-    if (filetype === '.dir') {
+    if (filetype === '.dir' && !inDir && false) {
       v = filename.substring(0, filename.lastIndexOf('.'));
-      v = v.length > 1 ? v + '/' : '/..';
+      v = v.length > 1 ? v + '/' : 'Documents/';
+    } else {
+	v = filename.split('/').pop();
+	v = v.replace('.dir', '/');
+	if (v === '/') v = 'Documents/'
     }
     return v;
   }
 
-  let dirRows = [...topDirs, ...allDirs].reduce((acc, filename, idx) => {
+  let topRows = topDirs.reduce((acc, filename, idx) => {
+      let v = visibleName(filename, false);
+    return (`
+      ${acc}
+      <a href="${idx !== topDirs.length-1 ? filename : ''}" style="color: rgba(41, 41, 41, 0.5); ${margin(idx)};">
+        ${v}
+      </a>
+    `)
+  }, '');    
+
+  let dirRows = allDirs.reduce((acc, filename, idx) => {
     let v = visibleName(filename);
     return (`
       ${acc}
-      <a href="${acc !== 1 ? filename : ''}" style="color: rgba(41, 41, 41, 0.5); ${margin(v)};">
+      <a href="${acc !== 1 ? filename : ''}" style="color: rgba(41, 41, 41, 0.7); ${margin(topDirs.length)}">
         ${v}
       </a>
     `)
@@ -135,12 +207,12 @@ export function DirectoryPage(topDirs, allDirs, allFiles) {
     let idx2 = f2.lastIndexOf('.');
     return f1.substring(idx1+1).localeCompare(f2.substring(idx2+1));
   });
-
+   
   let fileRows = allFiles.reduce((acc, filename, idx) => {
     let v = visibleName(filename);
     return (`
       ${acc}
-      <a href="${acc !== 1 ? filename : ''}">
+      <a href="${acc !== 1 ? filename : ''}" style="${margin(topDirs.length)}">
         ${v}
       </a>
     `)
@@ -148,13 +220,14 @@ export function DirectoryPage(topDirs, allDirs, allFiles) {
 
   let str = BasePage(`
      <div style="display:flex; flex-direction:column; width: 100vw; height: 100vh;">
-    <div style="display:flex;flex-direction:column;font-family:monospace; height: 25%; overflow-y: scroll; padding: 24px;">
-      ${dirRows}
-    </div>
-    <div style="border-top: 1px solid black; display:flex;flex-direction:column;font-family:monospace; height: 75%; overflow-y: scroll; padding: 24px;">
-      ${fileRows}
-    </div>
-   </div>
+       <div style="display:flex;flex-direction:column;font-family:Monaco;monospace; height:100%; overflow-y: scroll; padding: 12px;">
+         <div style="font-weight:bold;">Directory tree</div>
+            ${topRows}
+            ${dirRows}
+            ${fileRows}
+         </div>
+       </div>
+     </div>
 `);
   return str.toString();
 }
@@ -173,8 +246,10 @@ export function getContentType(extension) {
     '.mid': 'audio/midi',
     '.midi': 'audio/x-midi',
 
+      '.gif': 'image/gif',
     '.png': 'image/png',
-    '.jpg': 'image/jpg',
+      '.jpg': 'image/jpg',
+      '.jpeg': 'image/jpeg',
     '.svg': 'svg+xml',
     '.ico': 'image',
 
@@ -211,10 +286,13 @@ export function getFullPath(req = {}, res = {}) {
 }
 
 function Files() {
+  let id = 'Files';
+  let _id;
   function log(a='', b='', c='', d='', e='', f='') {
-    let _id = `Files[` + `${numToBytes(MEMCACHE_SIZE, { digits: 0 })}`.replaceAll(' ', '').padStart(5, ' ') + ']';
+    _id = `Files[` + `${numToBytes(MEMCACHE_SIZE, { digits: 0 })}`.replaceAll(' ', '').padStart(5, ' ') + ']';
     _log(_id, a, b, c, d, e, f); 
   };
+  log('init');
 
   // https://nodejs.org/api/fs.html#class-fsdirent 
   async function getDirectory(req = { }, res = { }) {
@@ -283,7 +361,7 @@ function Files() {
 
     if (ext === '' && name === '') {
       res.writeHead(200);
-      res.write(LandingPage());
+	res.write(LandingPage());
       res.end();
       return;
     }
@@ -328,7 +406,7 @@ function Files() {
       const stream = fs.createReadStream(filename);
       MEMCACHE[filename] = [];
       stream.on('open', () => { 
-        DO_LOG && log('getFile()', id, method, 'Read stream opened')
+        DO_LOG && log('getFile()', 'Read stream opened')
       });
       stream.on('data', (chunk) => {
         DO_LOG && log('getFile()', `${numToBytes(chunk.length)} load`); 

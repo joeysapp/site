@@ -1,5 +1,8 @@
 import { env } from 'node:process';
-const { SITE_HTTPS_PORT = 443 } = env;
+const {
+    SITE_HTTPS_ADDRESS = '127.0.0.1',
+    SITE_HTTPS_PORT = 443,
+} = env;
 
 import {
   RootEmitter,
@@ -8,16 +11,19 @@ import {
   HttpsServer,
 } from './services/index.js';
 
+// import { foo } from '../common/utils/index.mjs';
+
 import {
   log, fg, what, numToBytes,
   show_sockets, show_network_layers, show_http, show_init, show_files, show_time,
-} from './utils//index.mjs';
+} from '../common/utils/index.mjs';
+// 
 // show_network_layers();
 show_sockets();
 show_http();
 show_init();
 show_files();
-// show_time();
+// // show_time();
 
 function RootServer() {
   let id = 'RootServer';
@@ -25,7 +31,9 @@ function RootServer() {
 
   let server = new HttpsServer({
     id,
-    port: SITE_HTTPS_PORT,
+    host: process.env.SITE_ADDRESS,
+    port: process.env.SITE_HTTPS_PORT,
+
     onRequest: function(request, response, netSocket) {
       let { url, method, headers } = request;    
       log(id, 'request', `${method.toLowerCase()} ${url}`);
