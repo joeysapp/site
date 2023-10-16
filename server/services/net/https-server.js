@@ -292,13 +292,15 @@ function HttpsServer({
   _httpsServer.on('checkExpectation', (request, response) => { log({}, 'checkExpectation'); });
   _httpsServer.on('dropRequest', (request, socket) => { log({}, 'dropRequest(request, socket)'); });
   _httpsServer.on('clientError', (error, nodeSocket) => {
-    log({}, 'clientError', `\n${what(error, { showHidden: false })}`);
-    nodeSocket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+    log({}, 'clientError', `\n${what(error, { showHidden: false, compact: false })}`);
+    // nodeSocket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+    // Node CLI said destroying was better on clientError
+    nodeSocket.destroy();
   });
 
 
   _httpsServer.on('error', function(error) {
-    log({}, 'error', `\n\n${what(error, { showHidden: false })}\n\n`);
+    log({}, 'error', `\n\n${what(error, { showHidden: false, compact; false, })}\n\n`);
     // _httpsServer.close();
     RootEmitter.emit('shutdown', function httpsServerError(uhh_idk) {
       log({}, 'error->shutdown', `Emitted shutdown event after error ${what(uhh_idk)}`);

@@ -329,7 +329,9 @@ function Files() {
     try {
       let cwd = await readdir(filename, { withFileTypes: true, recursive: false });
       for (let f of cwd) {
-        if (f.isFile()) {
+        // if (!f.isDirectory() || f.isFile()) {
+        // Allow symilnkxs
+        if (!f.isDirectory()) {
           if ((f.name[0] !== '.') || (f.name[0] === '.' && hidden)) {
             // handle root pathing poorly
             let fname = shortpath ? `/${shortpath}/${f.name}` : `/${f.name}`;
