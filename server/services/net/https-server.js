@@ -1,4 +1,5 @@
 import https from 'node:https';
+import http from 'node:http';
 import tls from 'node:tls';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -31,7 +32,7 @@ let TLS_OPTIONS = {
   secureOptions,
 };
 const NETWORK_LAYERS = {
-  application: 'https', transport: 'tcp', internet: 'IPv4', link: 'MAC',
+  application: '--', transport: 'tcp', internet: 'IPv4', link: 'MAC',
   remoteAddress: '', remotePort: '', localAddress: '', localPort: '',
 };
 
@@ -80,8 +81,11 @@ function HttpsServer({
     };
   }  
 
+  logCiphers();
   let _httpsServer;
-  _httpsServer = https.createServer(TLS_OPTIONS);
+  // _httpsServer = https.createServer(TLS_OPTIONS);
+  _httpsServer = http.createServer();
+
   const netSockets = {};
   let _id = '${label}<'+`${port}`.padStart(5, ' ')+'-'+`${Object.keys(netSockets).length}`.padStart(3, ' ') +'>';
   log({}, 'init');
@@ -297,7 +301,6 @@ function HttpsServer({
     // Node CLI said destroying was better on clientError
     nodeSocket.destroy();
   });
-
 
   _httpsServer.on('error', function(error) {
     log({}, 'error', `\n\n${what(error, { showHidden: false, compact: false, })}\n\n`);
