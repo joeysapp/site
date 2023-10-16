@@ -3,6 +3,7 @@ import tls from 'node:tls';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import crypto from 'node:crypto';
 
 import NetSocket from './net-socket.js';
 import { RootEmitter } from '../index.js';
@@ -10,20 +11,24 @@ import { what, log as _log } from '../../../common/utils/index.mjs';
 
 const DEBUG = process.env.DEBUG || false;
 
+let { SSL_OP_NO_TLSv1, SSL_OP_NO_TLSv1_1, SSL_OP_NO_TLSv1_2 } = crypto.constants;
+let secureOptions = SSL_OP_NO_TLSv1+SSL_OP_NO_TLSv1_1+SSL_OP_NO_TLSv1_2;
 let TLS_OPTIONS = {
   // [tbd] Issues with a blocking read on linux..?
   key: fs.readFileSync(path.resolve(process.env.CERT_HOME, process.env.ROOT_KEY)),
   cert: fs.readFileSync(path.resolve(process.env.CERT_HOME, process.env.ROOT_CERT)),
   // ticketKeys: Buffer.from('foobar'.repeat(8)),
 
-  requestTimeout: 600,
-  handshakeTimeout: 1000, // default is 12000ms
+  requestTimeout: 500,
+  handshakeTimeout: 500, // default is 12000ms
   // keepAlive: true,
   // keepAliveTimeout: 1000 * 60 * 1,
 
   keepAlive: false, // For just simple fileserver stuff, dc sockets.
   keepAliveTimeout: 1,
-  allowHalfOpen: true,
+  allowHalfOpen: false,
+
+  secureOptions,
 };
 const NETWORK_LAYERS = {
   application: 'https', transport: 'tcp', internet: 'IPv4', link: 'MAC',
@@ -84,10 +89,7 @@ function HttpsServer({
   _httpsServer.addListener('connection', function(nodeSocket) {
     const { remoteAddress, remotePort, remoteFamily } = nodeSocket;
     const remote = { remoteAddress, remotePort, remoteFamily };
-
-    // Seeing if it's a TLSv1.3 socket
-    let protocol = nodeSocket.getProtocol();
-    log(remote, `connection protocol=${protocol}`);   
+    log(remote, `connection`);   
     // Didn't fire.. trying in NetSocket..
     // nodeSocket.once('session', function(session) {
     //   log(remote, 'connection/session', 'omfg the socket.on(sessioned)');
