@@ -151,9 +151,9 @@ function NetSocket({
   nodeSocket.on('pipe', function(error) { log('pipe'); }); 
   nodeSocket.on('unpipe', function() { log('unpipe'); });
 
-  nodeSocket.once('session', function(sessionBuffer) {
-    log('session', `<${sessionBuffer.length} bytes>`);
-  });
+  // nodeSocket.once('session', function(sessionBuffer) {
+  //   log('session', `<${sessionBuffer.length} bytes>`);
+  // });
 
 
   function log(a='', b='', c='', d='') {
