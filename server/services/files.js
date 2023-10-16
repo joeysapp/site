@@ -128,7 +128,7 @@ export function LandingPage() {
           ${acc}
           <div style="display:flex;width:min(800px, 100vw);">
             <div style="font-weight:bold;">${key}</div>
-            <div style="">${usage[key]}</div>
+            <div style="margin-right:0;margin-left:auto;">${usage[key]}</div>
           </div>
         `);
     }, '');
@@ -136,7 +136,7 @@ export function LandingPage() {
   let str = BasePage(`
     <div style="display:flex;flex-direction:column;font-family:Monaco;monospace;">
       <br/>
-      <div style="font-weight:normal;display:flex;flex-direction:column;padding:24px 12px 12px 24px;margin-left:auto;margin-right:auto;">
+      <div style="font-weight:normal;display:flex;flex-direction:column;padding:12px">
          ${procString}
        </div>
     </div>
@@ -161,21 +161,21 @@ export function ErrorCodePage(code, string) {
 
 export function DirectoryPage(topDirs, allDirs, allFiles) {
   function margin(idx = 1) {
-      // let depth = name.split('/').length;
-      // if (idx === 0) return '';
+    // let depth = name.split('/').length;
+    // if (idx === 0) return '';
     return `margin-left: ${(idx)*16}px;`;
   }
 
-    function visibleName(filename, inDir = true) {
+  function visibleName(filename, inDir = true) {
     let v = filename;
     let filetype = filename.substring(filename.lastIndexOf('.'));
     if (filetype === '.dir' && !inDir && false) {
       v = filename.substring(0, filename.lastIndexOf('.'));
       v = v.length > 1 ? v + '/' : 'Documents/';
     } else {
-	v = filename.split('/').pop();
-	v = v.replace('.dir', '/');
-	if (v === '/') v = 'Documents/'
+      v = filename.split('/').pop();
+      v = v.replace('.dir', '/');
+      if (v === '/') v = 'Documents/'
     }
     return v;
   }
