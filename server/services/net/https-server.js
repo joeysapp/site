@@ -300,7 +300,7 @@ function HttpsServer({
 
 
   _httpsServer.on('error', function(error) {
-    log({}, 'error', `\n\n${what(error, { showHidden: false, compact; false, })}\n\n`);
+    log({}, 'error', `\n\n${what(error, { showHidden: false, compact: false, })}\n\n`);
     // _httpsServer.close();
     RootEmitter.emit('shutdown', function httpsServerError(uhh_idk) {
       log({}, 'error->shutdown', `Emitted shutdown event after error ${what(uhh_idk)}`);
