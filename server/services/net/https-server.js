@@ -7,14 +7,14 @@ import process from 'node:process';
 import NetSocket from './net-socket.js';
 import { RootEmitter } from '../index.js';
 import { what, log as _log } from '../../../common/utils/index.mjs';
-// const _log = () => {}; const what = () => {}; const fg = () => {}; const bold = () => {}; const numToBytes = () => {};
 
 const DEBUG = process.env.DEBUG || false;
-const TLS_OPTIONS = {
-  cert: fs.readFileSync(path.resolve(process.env.HOME, process.env.ROOT_CERT)),    
-  key: fs.readFileSync(path.resolve(process.env.HOME, process.env.ROOT_KEY)),
-  ticketKeys: Buffer.from('foobar'.repeat(8)),
 
+let TLS_OPTIONS = {
+  // [tbd] Issues with a blocking read on linux..?
+  key: fs.readFileSync(path.resolve(process.env.CERT_HOME, process.env.ROOT_KEY)),
+  cert: fs.readFileSync(path.resolve(process.env.CERT_HOME, process.env.ROOT_CERT)),
+  ticketKeys: Buffer.from('foobar'.repeat(8)),
 
   requestTimeout: 600,
   handshakeTimeout: 1000, // default is 12000ms
@@ -60,6 +60,20 @@ function HttpsServer({
       return `${acc}${cipher.padEnd(32, ' ').toLowerCase()}`;
     }, `  Available crypto ciphers for TLS1.3\n  ${'-'.repeat(80)}`);
     _log('logCiphers', `\n${ciphers}`);
+  }
+
+  let keyFile = 'NO_KEY_FILE';
+  let certFile ='NO_CERT_FILE';
+  if (!certFile && process.env.CERT_HOME) {
+    certFile = fs.readFileSync(path.resolve(process.env.CERT_HOME, process.env.ROOT_CERT));
+    keyFile = fs.readFileSync(path.resolve(process.env.CERT_HOME, process.env.ROOT_KEY));
+    TLS_OPTIONS = {
+      cert: certFile,
+      key: keyFile,
+      ...TLS_OPTIONS,
+    };
+  } else {
+    _log('new httpsServer()', 'init.error', 'Could not find certificate files');
   }
 
   let _httpsServer;
@@ -190,11 +204,13 @@ function HttpsServer({
 
     log(remote, `secureConnection[TODO]`, `\n  ${tlsSocket.getProtocol()} - session ${tlsSocket.isSessionReused() ? '' : 'not '}resumed\n  ticket: ${sessionTicket}\n  session: ${session}\n\n .. but since session is not null, we know we did actually negotiate a resumption...?`);
   });
+
   _httpsServer.on('keylog', function(lineBuffer, tlsSocket) {
     const { remoteAddress, remotePort, remoteFamily } = tlsSocket;
     const remote = { remoteAddress, remotePort, remoteFamily, application: 'tls' };
     log(remote, 'keylog[TODO]');
   });
+
   _httpsServer.on('tlsClientError', function(exception, tlsSocket) {
     const { remoteAddress, remotePort, remoteFamily } = tlsSocket;
     const remote = { remoteAddress, remotePort, remoteFamily, application: 'tls' };
@@ -205,7 +221,7 @@ function HttpsServer({
   _httpsServer.on('connect', function() { log({}, 'connect'); });
   _httpsServer.on('checkContinue', (request, response) => { log({}, 'checkContinue'); });
   _httpsServer.on('checkExpectation', (request, response) => { log({}, 'checkExpectation'); });
-  _httpsServer.on('clientError', (error) => { log({}, 'clientError', `\n\n${what(error)}\n\n`); });
+  _httpsServer.on('clientError', (error) => { log({}, 'clientError', `\n\n${what(error, { showHidden: false })}\n\n`); });
   _httpsServer.on('dropRequest', (request, socket) => { log({}, 'dropRequest(request, socket)'); });
 
   _httpsServer.on('error', function(error) {
