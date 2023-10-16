@@ -65,6 +65,7 @@ function HttpsServer({
   let keyFile = 'NO_KEY_FILE';
   let certFile ='NO_CERT_FILE';
   if (!certFile && process.env.CERT_HOME) {
+    _log('new httpsServer()', 'init.error', 'Could not find certificate files on boot, attempting again');
     certFile = fs.readFileSync(path.resolve(process.env.CERT_HOME, process.env.ROOT_CERT));
     keyFile = fs.readFileSync(path.resolve(process.env.CERT_HOME, process.env.ROOT_KEY));
     TLS_OPTIONS = {
@@ -72,9 +73,7 @@ function HttpsServer({
       key: keyFile,
       ...TLS_OPTIONS,
     };
-  } else {
-    _log('new httpsServer()', 'init.error', 'Could not find certificate files');
-  }
+  }  
 
   let _httpsServer;
   _httpsServer = https.createServer(TLS_OPTIONS);

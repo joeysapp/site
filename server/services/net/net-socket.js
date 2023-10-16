@@ -1,13 +1,13 @@
-// import { what, log as _log, fg } from '../../utils/index.mjs';
-const _log = () => {}; const what = () => {}; const fg = () => {}; const bold = () => {}; const numToBytes = () => {};
+import { what, log as _log, fg } from '../../../common/utils/index.mjs';
 
 const NETWORK_LAYERS = {
-  application: '?', transport: 'tcp', internet: 'IPv4', link: 'MAC',
+  application: '--', transport: 'TCP', internet: '--', link: 'MAC',
   remoteAddress: '', remotePort: '', localAddress: '', localPort: '',
 };
 
+const DEBUG = process.env.DEBUG;
+
 function NetSocket({
-  DEBUG = false,
   id = 'NetSocket',
 
   nodeSocket = {},
@@ -17,6 +17,7 @@ function NetSocket({
   onEnd,
   onFinish,
   onClose,
+
   timeout = false,
   onTimeout = function(nodeSocket, timeout) {
     log('NetSocket', 'timeout', 'nodeSocket.end()/nodeSocket.destroy();');
@@ -150,12 +151,13 @@ function NetSocket({
 
 
   function log(a='', b='', c='', d='') {
-    _id = `${id}<`+`???`.padStart(5, ' ')+'>';
+    // _id = `${id}<`+`???`.padStart(5, ' ')+'>';
+    _id = `${id}<_______>`;
 
     // After .on(close), our server and the socket will no longer be bound.
     const { address = '--', port = '--', family = '--' } = nodeSocket.address();
     const { remoteAddress, remotePort, remoteFamily } = nodeSocket;   
-    let application = nodeSocket.encrypted ? 'tls' : 'net';    
+    let application = nodeSocket.encrypted ? 'tls' : 'net';
     const _NETWORK_LAYERS = {
       ...NETWORK_LAYERS,
       application,
