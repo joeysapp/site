@@ -57,6 +57,7 @@ function NetSocket({
       DEP_bufferSize: nodeSocket.bufferSize,
       writableLength: nodeSocket.writableLength,
       address: nodeSocket.address(),
+      buffer: nodeSocket. buffer,
     };
     console.log(`\n\n ${method} ${idx}\n${what(nodeSocketOptions)}`);
   }
@@ -65,12 +66,17 @@ function NetSocket({
 
   const CREATED = Date.now();
   let _id = 'netSocket<'+`${id}>`.padStart(5, ' ')+'-'+`___`.padStart(3, ' ') +'>';
-  log('init'); DEBUG && LOG_NODE_SOCKET('init', 0);
+  log('init');
+  // LOG_NODE_SOCKET('init', 0);
 
   nodeSocket.on('resume', function(nil) {
     log('resume'); DEBUG && LOG_NODE_SOCKET('resume', 0);
     data = null;
     readChunks = [];
+    nodeSocket.on('session', function(session) {
+      log('resume.session');
+    });
+
   });
   nodeSocket.on('readable', function() {
     log('readable', 'init');
@@ -169,7 +175,7 @@ function NetSocket({
     };
     _log(_NETWORK_LAYERS, id, a, b, c, d);
     if (family !== remoteFamily) {
-      _log(_NETWORK_LAYERS, id, `localFamily !== remoteFamily, ${family} !== ${remoteFamily}`);
+      // _log(_NETWORK_LAYERS, id, `localFamily !== remoteFamily, ${family} !== ${remoteFamily}`);
     }
   };
   return nodeSocket;

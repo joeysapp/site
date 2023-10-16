@@ -14,7 +14,7 @@ let TLS_OPTIONS = {
   // [tbd] Issues with a blocking read on linux..?
   key: fs.readFileSync(path.resolve(process.env.CERT_HOME, process.env.ROOT_KEY)),
   cert: fs.readFileSync(path.resolve(process.env.CERT_HOME, process.env.ROOT_CERT)),
-  ticketKeys: Buffer.from('foobar'.repeat(8)),
+  // ticketKeys: Buffer.from('foobar'.repeat(8)),
 
   requestTimeout: 600,
   handshakeTimeout: 1000, // default is 12000ms
@@ -85,6 +85,10 @@ function HttpsServer({
     const { remoteAddress, remotePort, remoteFamily } = nodeSocket;
     const remote = { remoteAddress, remotePort, remoteFamily };
     log(remote, 'connection');
+    // Didn't fire.. trying in NetSocket..
+    // nodeSocket.once('session', function(session) {
+    //   log(remote, 'connection/session', 'omfg the socket.on(sessioned)');
+    // });
     onConnection && onConnection(netSocket);
   });
 
@@ -149,79 +153,140 @@ function HttpsServer({
   //   }
   // }, 10000);
 
-  _httpsServer.on('newSession', function(sessionID, sessionData, callback) {
-    const nodeSocket = { thisIsHowYouResumeTLS: '[todo]' };
-    const { remoteAddress = '???', remotePort = '???', remoteFamily = '???' } = nodeSocket;
-    const remote = { remoteAddress, remotePort, remoteFamily, application: 'tls' };
-
-    log(remote, 'newSession[TODO]', `id=${what(sessionID)}`);
-    let sessionKey = sessionID.toString('hex');
-    let newSessionData = `foo ${Math.floor(Math.random()*1000)}`;
-    newSessionData = `Connection #${Object.keys(store).length+1}`;
-
-    store[sessionKey] = newSessionData;
-    let printObj = {
-      sessionKey,
-      newSessionData,
-      store: Object.keys(store).length,
-    };
-    log(remote, 'newSession[TODO]', `\n${what(printObj, { compact: false })}`);
-    callback();
-  });
-
+  // This means the network knows there __IS__ a previous session to use.
+  // Our "failure" to resume here is more "sorry we know you're X but we can't get X's data."
   _httpsServer.on('resumeSession', function(sessionID, callback) {
-    const nodeSocket = { thisIsHowYouResumeTLS: '[todo]' };
-    const { remoteAddress = '???', remotePort = '???', remoteFamily = '???' } = nodeSocket;
-    const remote = { remoteAddress, remotePort, remoteFamily, application: 'tls' } ;
-
     let sessionKey = sessionID.toString('hex');
-    let prevSessionData = store[sessionKey];
-    log(remote, 'resumeSession[TODO]', `${what(sessionID)}`);
+    let sessionData = store[sessionKey];
 
-    let printObj = {
-      sessionKey,
-      prevSessionData,
-      store: Object.keys(store).length,
-    };
-    log(remote, 'resumeSession[TODO]', `\n${what(printObj, { compact: false })}`);
+    // let printObj = {
+    //   msg: 'The internet knows we know this session. But did we save any information about them? We should have...',
+    //   msg_two: 'So uh, maybe just manually say we know sessionData.........?',
+    //   sessionKey,
+    //   sessionData,
+    //   store: Object.keys(store).length,
+    //   callback: `-> callback(null, ${sessionData})`,
+    // };
+    log({}, 'resumeSession', `the _INTERNET_ handled TLS1.3 for us :-D -> secureConnection -> any number of newSession chunks`);
+    // log({}, 'resumeSession', `\n${what(printObj, { compact: false })}`);
 
-    if (prevSessionData) {
-      log(remote, 'resumeSession[TODO]', 'sessionKey in store, callback with previous session data');
-      callback(null, prevSessionData);
-    } else {
-      log(remote, 'resumeSession[TODO]', 'sessionKey is not in store, callback to create a new session');
-      callback(null, null);
-    }
+    // Pretty sure this will always be undefined in TLSv1.3
+    sessionData = null;
+    callback(null, sessionData);
   });
+
+
   _httpsServer.on('secureConnection', function(tlsSocket) {
     const { remoteAddress, remotePort, remoteFamily } = tlsSocket;
     const remote = { remoteAddress, remotePort, remoteFamily, application: 'tls' };
-    // https://nodejs.org/api/tls.html#tlssocketgettlsticket
-    const sessionTicket = tlsSocket.getTLSTicket();
-    // https://nodejs.org/api/tls.html#tlssocketgetsession
-    const session = tlsSocket.getSession().toString('hex');
 
-    log(remote, `secureConnection[TODO]`, `\n  ${tlsSocket.getProtocol()} - session ${tlsSocket.isSessionReused() ? '' : 'not '}resumed\n  ticket: ${sessionTicket}\n  session: ${session}\n\n .. but since session is not null, we know we did actually negotiate a resumption...?`);
+    // TLS1.2 only: https://nodejs.org/api/tls.html#tlssocketgetsession
+    // Hmm. Are we supposed to set store here....?
+    
+    // TLS1.3 
+    // https://nodejs.org/api/tls.html#event-session
+    // For TLSv1.2 and below, tls.TLSSocket.getSession() can be called once the handshake is complete. For TLSv1.3, only ticket-based resumption is allowed by the protocol, multiple tickets are sent, and the tickets aren't sent until after the handshake completes. So it is necessary to wait for the 'session' event to get a resumable session. Applications should use the 'session' event instead of getSession() to ensure they will work for all TLS versions. Applications that only expect to get or use one session should listen for this event only once:
+
+    // Didn't fire.. trying in NetSocket...
+    // tlsSocket.once('session', function(session) {
+    //   log('secureConnection', `tlsSocket.on(session)\n${what(session.toString('hex'))}`);
+    // });
+
+    const { servername, alpnProtocol } = tlsSocket;
+    const sessionProtocol = tlsSocket.getProtocol();
+    // IDK if this boolean is reliable?
+    const sessionReused = tlsSocket.isSessionReused();
+    const sessionAddress = tlsSocket.address();
+    // let printObj = {
+    //   // msg: 'Since we sent a callback(null, null), we *think* we need to create a new session but we dont',
+    //   msg: 'Apparently in TLS1.3 the ticket keys are "random" so we need to listen for the socket here to actually resume their session.',
+    //   sessionProtocol,
+    //   sessionReused,
+    //   sessionAddress,
+    // };
+    let printObj = {
+      msg: `connected to ${tlsSocket.getProtocol()} socket, now we wait for it to send/stream us stuff in newSession event`
+    };
+
+    log (remote, 'secureConnection', `connected to ${tlsSocket.getProtocol()} socket, now we wait for it to send/stream us stuff in newSession event`);
+    // log(remote, `secureConnection`, `\n${what(printObj, { compact: false })}`);
   });
+
+  
+  // https://github.com/nodejs/node/blob/main/doc/api/tls.md#event-resumesession
+  // So I believe this fires for any given connection; 
+  _httpsServer.on('newSession', function(sessionID, sessionDataFromResume, callback) {
+    // const nodeSocket = { thisIsHowYouResumeTLS: '[todo]' };
+    // const { remoteAddress = '???', remotePort = '???', remoteFamily = '???' } = nodeSocket;
+    // const remote = { remoteAddress, remotePort, remoteFamily, application: 'tls' };
+
+    let sessionKey = sessionID.toString('hex');
+    let sessionData = sessionDataFromResume;
+    // TLSv1.3, it looks like first 16 bytes are always the identifying header? So we can chunk in the rest?
+    // https://github.com/serverless-dns/serverless-dns/commit/abf20c838ae42e5ba4cf856f5a29784bcf8be161
+    // https://github.com/serverless-dns/serverless-dns/issues/30
+    // "almost obsolete session resumption"?
+
+    // As a result, I think this is not worth the effort? All of the resumption stuff
+    // is being done behind the scenes
+
+    let sessionHeader = sessionData.subarray(0, 16).toString('hex');
+    let sessionIDInData = sessionData.subarray(16, 48).toString('hex');
+    let supposedlyMatchingTwoBytes = sessionData.subarray(48, 50).toString('hex');
+    let sessionRestData = sessionData.subarray(50).toString('hex');
+    // let sessionChunkedData = sessionData;
+
+    // store[sessionKey] = sessionData.toString('hex');
+    // https://www.wolfssl.com/tls-1-3-performance-resumption/
+    // Okay, so there may not even be any point here, attempting to ID the user with these chunks
+    // because I'm thinking all the protocol stuff is probably behind the scenes? IDK.
+    let printObj = {
+      maskedChunk: sessionData,      
+    };
+
+    // let printObj = {
+    //   msg: 'Okay, wait. So is newSession _ONLY_ called when resumeSession(null, null) is called, or will it also be called with resumeSession(null, store[id]), and newSession is more like, oh hey new session to handle it may or may not be previously known?',
+    //   sessionKey,
+    // 
+    //   length: sessionDataFromResume.length,
+    //   sessionIDInData,
+    //   supposedlyMatchingTwoBytes,
+    //   sessionRestData,
+    //   sessionHeader,
+    // }
+    log({}, 'newSession', `TLSv1.3 (already connected?) socket is streaming in us stuff, I think`);
+    // log({}, 'newSession [TODO]', `\n${what(printObj, { compact: false })}`);
+
+    // log({}, 'newSession [TODO]', `\n${what(printObj, { compact: false })}\n${what(store, { compact: false })}\n`)
+    // let essionData = `foo ${Math.floor(Math.random()*1000)}`;
+    // newSessionData = `Connection #${Object.keys(store).length+1}`;
+    // store[sessionKey] = newSessionData;
+
+    callback();
+  });
+  
 
   _httpsServer.on('keylog', function(lineBuffer, tlsSocket) {
     const { remoteAddress, remotePort, remoteFamily } = tlsSocket;
     const remote = { remoteAddress, remotePort, remoteFamily, application: 'tls' };
-    log(remote, 'keylog[TODO]');
+    log(remote, `keylog`);
   });
 
   _httpsServer.on('tlsClientError', function(exception, tlsSocket) {
     const { remoteAddress, remotePort, remoteFamily } = tlsSocket;
     const remote = { remoteAddress, remotePort, remoteFamily, application: 'tls' };
-    log(remote, 'tlsClientError[TODO]\n${what(exception)}');
+    log(remote, `tlsClientError\n${what(exception)}`);
   });
 
   _httpsServer.on('listening', function() { log({}, 'listening'); });
   _httpsServer.on('connect', function() { log({}, 'connect'); });
   _httpsServer.on('checkContinue', (request, response) => { log({}, 'checkContinue'); });
   _httpsServer.on('checkExpectation', (request, response) => { log({}, 'checkExpectation'); });
-  _httpsServer.on('clientError', (error) => { log({}, 'clientError', `\n\n${what(error, { showHidden: false })}\n\n`); });
   _httpsServer.on('dropRequest', (request, socket) => { log({}, 'dropRequest(request, socket)'); });
+  _httpsServer.on('clientError', (error) => {
+    log({}, 'clientError', `\n${what(error, { showHidden: false })}`);
+  });
+
 
   _httpsServer.on('error', function(error) {
     log({}, 'error', `\n\n${what(error, { showHidden: false })}\n\n`);
