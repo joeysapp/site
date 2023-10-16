@@ -280,7 +280,10 @@ function HttpsServer({
   _httpsServer.on('tlsClientError', function(exception, tlsSocket) {
     const { remoteAddress, remotePort, remoteFamily } = tlsSocket;
     const remote = { remoteAddress, remotePort, remoteFamily, application: 'tls' };
-    log(remote, `tlsClientError\n${what(exception)}`);
+    let cipher = tlsSocket.getCipher();
+    let protocol = tlsSocket.getProtocol();
+    let printObj = { ...exception, protocol, cipher };
+    log(remote, `tlsClientError\n${what(printObj, { compact: false, showHidden: false })}`);
   });
 
   _httpsServer.on('listening', function() { log({}, 'listening'); });
@@ -288,8 +291,9 @@ function HttpsServer({
   _httpsServer.on('checkContinue', (request, response) => { log({}, 'checkContinue'); });
   _httpsServer.on('checkExpectation', (request, response) => { log({}, 'checkExpectation'); });
   _httpsServer.on('dropRequest', (request, socket) => { log({}, 'dropRequest(request, socket)'); });
-  _httpsServer.on('clientError', (error) => {
+  _httpsServer.on('clientError', (error, nodeSocket) => {
     log({}, 'clientError', `\n${what(error, { showHidden: false })}`);
+    nodeSocket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
   });
 
 
