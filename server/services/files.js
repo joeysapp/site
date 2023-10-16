@@ -49,20 +49,19 @@ import process from 'node:process';
 // [todo] Figure out handling SIGINT on async ops, do we need child processes writing to files?
 import { RootEmitter } from './index.js';
 import { what, log as _log, numToBytes, fg, bold } from '../../common/utils/index.mjs';
-// const _log = () => {}; const what = () => {}; const fg = () => {}; const bold = () => {}; const numToBytes = () => {};
-_log('files', 'what is happening hwy is it exiting');
 
-const STATIC_BASE = "./src/files/";
-const IS_PRODUCTION = false; // handle the webpackDevServer proxy issues
+const STATIC_BASE = "./files/";
+// const STATIC_BASE = "./src/files/";
+
+// handle the webpackDevServer proxy issues
+const IS_PRODUCTION = false;
 
  // Cache basic files in memory for now
 let MEMCACHE = {};
 let MEMCACHE_SIZE = 0;
 let LOADING = {};
 
-// Let common/log-server's show_files() handle this.
 let DO_LOG = true;
-// This is for when we figure out file queueing.
 let DO_DEBUG = true;
 
 // TODO - make this like, redirect to built JSX components somehow. Idk. Or just have them as plaintext.
@@ -293,6 +292,11 @@ function Files() {
     _log(_id, a, b, c, d, e, f); 
   };
   log('init');
+  RootEmitter.on('shutdown', function handleShutdown(callback) {
+    log('shutdown', 'Finishing writing out to files');
+
+    callback();
+  });
 
   // https://nodejs.org/api/fs.html#class-fsdirent 
   async function getDirectory(req = { }, res = { }) {

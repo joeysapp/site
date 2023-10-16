@@ -5,6 +5,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 import NetSocket from './net-socket.js';
+import { RootEmitter } from '../index.js';
 import { what, log as _log } from '../../../common/utils/index.mjs';
 // const _log = () => {}; const what = () => {}; const fg = () => {}; const bold = () => {}; const numToBytes = () => {};
 
@@ -210,6 +211,10 @@ function HttpsServer({
   _httpsServer.on('error', function(error) {
     log({}, 'error', `\n\n${what(error, { showHidden: false })}\n\n`);
     // _httpsServer.close();
+    RootEmitter.emit('shutdown', function httpsServerError(uhh_idk) {
+      log({}, 'error->shutdown', `Emitted shutdown event after error ${what(uhh_idk)}`);
+      // uhh_idk();
+    });
   });
   _httpsServer.on('close', function() {
     log({}, 'close', 'httpsServer.error -> closing');
