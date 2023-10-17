@@ -1,4 +1,7 @@
 import { what, log as _log, fg } from '../../../common/utils/index.mjs';
+import { Proto, Info, Sock as SiteUser } from '../../../common/types/index.mjs';
+import { asBuffer, asFrame } from '../../../common/types/proto.mjs';
+
 
 const NETWORK_LAYERS = {
   application: '--', transport: 'TCP', internet: '--', link: 'MAC',
@@ -63,6 +66,7 @@ function NetSocket({
     console.log(`\n\n ${method} ${idx}\n${what(nodeSocketOptions)}`);
   }
   let readChunks = [];
+  // :-|
   let data = null;
 
   const CREATED = Date.now();
@@ -80,7 +84,7 @@ function NetSocket({
 
   });
   nodeSocket.on('readable', function() {
-    log('readable', 'init');
+    log('readable', 'init', ``);
     let chunk;
     while ((chunk = nodeSocket.read()) !== null) {
       log('readable', `read in <${chunk.length} b>`);
@@ -88,18 +92,28 @@ function NetSocket({
     }
     DEBUG && LOG_NODE_SOCKET('readable', 2);
 
+    // This probabaly won't work for large posts, but does for WSS.
+    // setDataToString();
+
+    
     if (nodeSocket.readyState === 'open' && nodeSocket.timeout === 0 ) {
       log('readable', 'All chunks streamed in and socket.readyState=open / socket.timeout=0');
-      setDataToString();
     } else if (nodeSocket.readyState === 'open') {
       log('readable', 'All chunks streamed in and socket.readyState=open');
     } else {
       log('readable', `All chunks streamed in and socket.readyState=${nodeSocket.readyState} (..we already wrote to it? and it's ending?)`);
-      setDataToString();
     }
   });
 
+  nodeSocket.on('data', async function(data) {
+    // log('data', `\n${what(data, { compact: false })}`);
+    // log('data', `\n${what(nodeSocket, { showHidden: false, compact: false })}`);
+    let proto = Proto.prototype.fromFrame(data);
+    log('data', `\n${what(proto, { compact: false })}`);
+  });
   nodeSocket.on('read', function() { log('read'); });
+
+  // [todo] Need to have like, setDataToHTTPRequest, setDataToUTF8, setDataToBinary, etc.
   function setDataToString() {
     data = readChunks.join('');
     let returnSeq = '\r\n\r\n';
@@ -126,11 +140,13 @@ function NetSocket({
       }, {}),
       data,
     };
-    log('setDataToString()', `${what(data)}`);
+    log('setDataToString()', `\n${what(data), { compact: false }}`);
   }
   nodeSocket.on('end', function() {
     log('end');
-    if (!data) setDataToString();
+    if (!data) {
+      // setDataToString();
+    }
     onEnd && onEnd(this, data);
   });
   nodeSocket.on('finish', function(error) {

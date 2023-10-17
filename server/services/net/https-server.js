@@ -74,6 +74,9 @@ function HttpsServer({
     // but (hopefully) that was an https/tls thing?
     let netSocket = nodeSocket;
 
+    request.addListener('socket', function(nodeSocket) {
+      log(remote, 'req(req.socket)', `<${id}> nodeSocket` );
+    });
     request.addListener('aborted', function(close) {
       log(remote, 'req(req.aborted)', `<${id}> request aborted ${close}` );
     });
@@ -100,9 +103,17 @@ function HttpsServer({
   });
 
   _httpsServer.on('upgrade', function(request, nodeSocket, head) {
-    log({}, 'upgrade', '[todo] Bring back in the handshake stuff');
-    nodeSocket.write("500 / Error");
-    nodeSocket.end();
+    log({}, 'upgrade');
+    handleUpgrade(request, nodeSocket, head)
+      .then((something) => {
+        log({}, 'upgrade', `[todo] Then we do something with this WebSocket`);
+        // [todo] Add to connection pool
+
+      }).catch((error) => {
+        log({}, 'upgrade', `[ERR] ${error}`);
+        nodeSocket.write("500 / Error");
+        nodeSocket.end();
+      });
   });
 
   _httpsServer.on('listening', function() { log({}, 'listening'); });
@@ -148,3 +159,42 @@ function HttpsServer({
   return _httpsServer; 
 }
 export default HttpsServer;
+
+
+// TBD where these functions should go
+function sha1Hash(value, type='binary', base='base64') {
+  return crypto.createHash('sha1').update(value, type).digest(base);
+}
+
+// Websocket handshake
+async function handleUpgrade(request, socket) {
+  return new Promise((resolve, reject) => {
+    const protocols = request.headers['sec-websocket-protocol'];
+    const key = request.headers['sec-websocket-key'];  
+
+    if (request.headers['upgrade'] !== 'websocket' || !key) {
+      // socket.write(headers(['HTTP/1.1 Bad Request']));
+      socket.write('HTTP/1.1 Bad Request');
+      socket.end();
+      reject();
+    }
+
+    // [ref] GUID from websocket whitepaper
+    // https://github.com/websockets/ws/blob/master/doc/ws.md#event-headers
+    const upgradeGUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+    const websocketPairKey = sha1Hash([key, upgradeGUID].join(''));
+    function combineHeaders(h) { return h.join('\r\n') + '\r\n\r\n'; }
+
+    // [note] the Sec-Websocket-Accept key here could be modified for own janky ws connection
+    socket.write(combineHeaders([
+      'HTTP/1.1 101 Web Socket Protocol Handshake',
+      'Upgrade: WebSocket',
+      'Connection: Upgrade', 
+      `Sec-WebSocket-Accept: ${websocketPairKey}`,
+    ]));
+
+    _log('socketHandshake()', `write back signed sha1 header`);
+    resolve();
+  });
+}
+
