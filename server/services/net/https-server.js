@@ -85,7 +85,7 @@ function HttpsServer({
     log(remote, 'request', `\n${what(printObj, { compact: false })}`);
 
     // Just hang them, this works
-    if (shouldBlock(request, response, nodeSocket) || true) {
+    if (shouldBlock(request, response, nodeSocket)) {
       handleBlock(request, response, nodeSocket)
         .then(() => {
           log(remote, 'request', 'Blocked request');

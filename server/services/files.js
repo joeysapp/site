@@ -372,6 +372,8 @@ function Files() {
       // return;
       name = 'files/index.html';
       ext = '.html';
+      // todo - handling hostnames
+      filename = 'files/index.html';
     }
 
     if (ext === '.dir' || name === '.dir') {
