@@ -39,6 +39,14 @@ function RootServer() {
         //   }).catch((err) => {
         // 
         //   });        
+      } else {
+        // https://www.rfc-editor.org/rfc/rfc9110.html#section-15.3.1
+        
+        response.writeHead(200);
+        response.end('HTTP 1.0 / 200 OK', () => {
+          request.destroy();
+          netSocket.destroy();
+        });
       }
     },
   });

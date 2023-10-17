@@ -118,7 +118,24 @@ function HttpsServer({
       onResponseClose && onResponseClose(request, response, netSocket);
     });
 
-    onRequest && onRequest(request, response, netSocket);
+    // I think this is where external stuff would do whatever with the request, right?
+    // .... hmm
+    // onRequest(request, response, netSocket)
+    //  .then((what? like, success? messagecode, etc?) => {
+    //     response.writeHead(messageCode);
+    //     response.write(data);
+    // }).
+    if (onRequest) {
+      onRequest(request, response, netSocket);
+    } else {
+      log('request', 'uhhhhhhh should we close now?');
+      // https://www.rfc-editor.org/rfc/rfc9110.html#section-15.3.1
+      response.writeHead(200);
+      response.end('HTTP 1.0 / 200 OK', () => {
+        request.destroy();
+        netSocket.destroy();
+      });
+    }
   });
 
   _httpsServer.on('upgrade', function(request, nodeSocket, head) {
