@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-scripts/boot.sh .env.deploy
+scripts/boot.sh .env.local

@@ -12,9 +12,9 @@ const DEBUG = process.env.DEBUG;
 
 
 function NetSocket({
-  id = 'NetSocket',
-
   nodeSocket = {},
+  // request = {},
+
   onResume,
   onReadable,
   onRead,
@@ -70,7 +70,7 @@ function NetSocket({
   let data = null;
 
   const CREATED = Date.now();
-  let _id = 'netSocket<'+`${id}>`.padStart(5, ' ')+'-'+`___`.padStart(3, ' ') +'>';
+  let _id = nodeSocket.id;
   log('init');
   // LOG_NODE_SOCKET('init', 0);
 
@@ -108,6 +108,8 @@ function NetSocket({
   nodeSocket.on('data', async function(data) {
     // log('data', `\n${what(data, { compact: false })}`);
     // log('data', `\n${what(nodeSocket, { showHidden: false, compact: false })}`);
+    const { headers } = nodeSocket;
+    log('data', `\n${what(headers)}`);
     let proto = Proto.prototype.fromFrame(data);
     log('data', `\n${what(proto, { compact: false })}`);
   });
@@ -175,7 +177,7 @@ function NetSocket({
 
   function log(a='', b='', c='', d='') {
     // _id = `${id}<`+`???`.padStart(5, ' ')+'>';
-    _id = `${id}<_______>`;
+    // _id = `${id}<_______>`;
 
     // After .on(close), our server and the socket will no longer be bound.
     const { address = '--', port = '--', family = '--' } = nodeSocket.address();
@@ -190,7 +192,7 @@ function NetSocket({
       remotePort,
       internet: remoteAddress ? remoteFamily : family,
     };
-    _log(_NETWORK_LAYERS, id, a, b, c, d);
+    _log(_NETWORK_LAYERS, _id, a, b, c, d);
     if (family !== remoteFamily) {
       // _log(_NETWORK_LAYERS, id, `localFamily !== remoteFamily, ${family} !== ${remoteFamily}`);
     }

@@ -3,3 +3,4 @@ files
 .gitmodules
 .env*
 local-frontend
+run

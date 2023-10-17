@@ -31,22 +31,15 @@ function RootServer() {
       log(id, 'request', `${method.toLowerCase()} ${url} but the underlying http-server is doing everything/`);
 
       // [todo] This should be a thennable, but it's just piping to response and holding in memcache for now.
-      files.getFile(request, response);
-    },
-    onSocketRead: function(netSocket, readData = {}) {
-      let { data, headers, signature } = readData;
-      if (signature) {
-        log(`${id}.NetSocket.read.signature`, `${what(signature)}`);
+      if (method.toLowerCase() === 'get') {
+        files.getFile(request, response);
+        // files.streamFileTo(request, response)
+        //   .then((something) => {
+        // 
+        //   }).catch((err) => {
+        // 
+        //   });        
       }
-      if (headers) {
-        log(`${id}.NetSocket.read.headers`, `\n${what(headers)}`);
-      }
-      if (data) {
-        log(`${id}.NetSocket.read.data`, `\n${what(data)}`);
-      }
-    },
-    onSocketClose: function(netSocket, data) {
-      log(`${id}.NetSocket.close`, `${netSocket.net_socket_id} [ data/headers present ]`);
     },
   });
 }

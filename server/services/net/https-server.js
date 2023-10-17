@@ -43,11 +43,20 @@ function HttpsServer({
   let _id = '${label}<'+`${port}`.padStart(5, ' ')+'-'+`${Object.keys(netSockets).length}`.padStart(3, ' ') +'>';
   log({}, 'init');
 
+  let connections = {
+    // If we use symbols as keys, how can we handle hot r... whatever
+  };
   _httpsServer.addListener('connection', function(nodeSocket) {
     const { remoteAddress, remotePort, remoteFamily } = nodeSocket;
     const remote = { remoteAddress, remotePort, remoteFamily };
     log(remote, `connection`);
 
+    // let id = Symbol('Socket#####'); // not stringable..
+    let id = 'Connection(####)';
+    nodeSocket.id = id;
+
+    // This is largely a wrapper for the actual nodesocket... adding in basic handlers..
+    // but we might want to extend them, I guess. So just keep track of the netSOcket?
     let netSocket = new NetSocket({
       nodeSocket,
       onResume: onSocketResume,
@@ -57,21 +66,21 @@ function HttpsServer({
       onFinish: onSocketFinish,
       onClose: onSocketClose,
     });
+    connections[id] = netSocket;
     onConnection && onConnection(netSocket);
   });
 
   _httpsServer.addListener('request', function(request, response) {
     let { socket: nodeSocket, headers, method, url, statusCode, statusMessage, httpVersion } = request;
-    const { remoteAddress, remotePort, remoteFamily } = nodeSocket;
+
+    const { remoteAddress, remotePort, remoteFamily, id } = nodeSocket;
     const remote = { remoteAddress, remotePort, remoteFamily };
 
-    let id = Math.floor(Math.random()*100000);
-    let printObj = { headers, url, method, statusCode, statusMessage, httpVersion };
+    // let id = Math.floor(Math.random()*100000);
+    let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id };
     log(remote, 'request', `\n${what(printObj, { compact: false })}`);
-
-    // TBD if we want to be setting up our socket with listeners in connection or here..
-    // I recall there was a problem with setting up event listeners in connection,
-    // but (hopefully) that was an https/tls thing?
+    nodeSocket.headers = headers;
+    nodeSocket.contentType = headers['content-type'];
     let netSocket = nodeSocket;
 
     request.addListener('socket', function(nodeSocket) {
@@ -103,7 +112,14 @@ function HttpsServer({
   });
 
   _httpsServer.on('upgrade', function(request, nodeSocket, head) {
+    let { headers, method, url, statusCode, statusMessage, httpVersion } = request;
+
     log({}, 'upgrade');
+    let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id };
+    // log({}, 'upgrade', `\n${what(printObj, { compact: false })}`);
+    nodeSocket.headers = headers;
+    nodeSocket.contentType = headers['sec-websocket-protocol'];
+
     handleUpgrade(request, nodeSocket, head)
       .then((something) => {
         log({}, 'upgrade', `[todo] Then we do something with this WebSocket`);
