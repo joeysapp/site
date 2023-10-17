@@ -106,14 +106,12 @@ function NetSocket({
   });
 
   nodeSocket.on('data', async function(data) {
-    // log('data', `\n${what(data, { compact: false })}`);
-    // log('data', `\n${what(nodeSocket, { showHidden: false, compact: false })}`);
     const { headers, id, contentType } = nodeSocket;
-    // log('data', `\n${what(headers)}`);
-    // log('data', contentType);
+
     let weUpgradedThisSocketAlready = false;
     if (headers['sec-websocket-protocol'] === 'proto.joeys.app.utf8') {
       let proto = Proto.prototype.fromFrame(data);
+      // This is lazy, lmao
       if (proto.readBigInt64BE) {
         proto = data.toString('utf8');
       }
@@ -167,7 +165,9 @@ function NetSocket({
   });
   nodeSocket.on('close', function(hadError = true) {
     log('close', `age=${(Date.now() - CREATED)/1000.0} s`);
-    if (!data) setDataToString();
+    if (!data) {
+      // setDataToString();
+    }
     onClose && onClose(this, data);
   });
 

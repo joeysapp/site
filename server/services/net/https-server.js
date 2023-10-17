@@ -46,14 +46,17 @@ function HttpsServer({
   let connections = {
     // If we use symbols as keys, how can we handle hot r... whatever
   };
-  _httpsServer.addListener('connection', function(nodeSocket) {
-    const { remoteAddress, remotePort, remoteFamily } = nodeSocket;
-    const remote = { remoteAddress, remotePort, remoteFamily };
-    log(remote, `connection`);
 
-    // let id = Symbol('Socket#####'); // not stringable..
-    let id = 'Connection(####)';
-    nodeSocket.id = id;
+  _httpsServer.addListener('connection', function(nodeSocket) {
+    // const { remoteAddress, remotePort, remoteFamily } = nodeSocket;
+    // const remote = { remoteAddress, remotePort, remoteFamily };
+
+    // Their headers have to be read in via .readable->.data->(request/upgrade)
+    bindSocket(null, null, nodeSocket);
+
+    let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;
+    let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests };
+    log(remote, `connection`, `Populated socket.remote w/o headers -> new ${id}\n${what(printObj, {compact: false})}`);
 
     // This is largely a wrapper for the actual nodesocket... adding in basic handlers..
     // but we might want to extend them, I guess. So just keep track of the netSOcket?
@@ -71,17 +74,24 @@ function HttpsServer({
   });
 
   _httpsServer.addListener('request', function(request, response) {
-    let { socket: nodeSocket, headers, method, url, statusCode, statusMessage, httpVersion } = request;
+    // let { socket: nodeSocket, headers, method, url, statusCode, statusMessage, httpVersion } = request;
+    let { socket: nodeSocket, data } = request;
+    bindSocket(request, response, nodeSocket);
 
-    const { remoteAddress, remotePort, remoteFamily, id } = nodeSocket;
-    const remote = { remoteAddress, remotePort, remoteFamily };
 
-    // let id = Math.floor(Math.random()*100000);
-    let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id };
-    log(remote, 'request', `\n${what(printObj, { compact: false })}`);
-    nodeSocket.headers = headers;
-    nodeSocket.contentType = headers['content-type'];
     let netSocket = nodeSocket;
+    let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;
+    let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests, data };
+    log(remote, 'request', `\n${what(printObj, { compact: false })}`);
+
+    // Just hang them, this works
+    if (shouldBlock(request, response, nodeSocket) || true) {
+      handleBlock(request, response, nodeSocket)
+        .then(() => {
+          log(remote, 'request', 'Blocked request');
+        });
+      return;
+    }
 
     request.addListener('socket', function(nodeSocket) {
       log(remote, 'req(req.socket)', `<${id}> nodeSocket` );
@@ -112,13 +122,23 @@ function HttpsServer({
   });
 
   _httpsServer.on('upgrade', function(request, nodeSocket, head) {
-    let { headers, method, url, statusCode, statusMessage, httpVersion } = request;
+    bindSocket(request, null, nodeSocket);
 
-    log({}, 'upgrade');
-    let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id };
-    // log({}, 'upgrade', `\n${what(printObj, { compact: false })}`);
-    nodeSocket.headers = headers;
+    let netSocket = nodeSocket;
+    let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;
+    let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests };
+    
+    // ehhh
     nodeSocket.contentType = headers['sec-websocket-protocol'];
+    log(remote, 'upgrade', `\n${what(printObj, { compact: false })}`);
+
+    if (shouldBlock(request, null, nodeSocket)) {
+      handleBlock(request, null, nodeSocket)
+        .then(() => {
+          log(remote, 'upgrade', 'Blocked request');
+        });
+      return;
+    }
 
     handleUpgrade(request, nodeSocket, head)
       .then((something) => {
@@ -178,6 +198,82 @@ export default HttpsServer;
 
 
 // TBD where these functions should go
+
+// Is fired on: 
+// 1. connection            (null,              null, nodeSocket)
+// 2. request OR upgrade    (req = { headers }, res, nodeSocket)
+function bindSocket(request = null, response = null, nodeSocket = null) {
+  // 1. connection(null, null, nodeSocket);
+  let { remoteAddress, remotePort, remoteFamily } = nodeSocket;
+  if (request) {
+    // 2. request(req, res, socket)
+    // 2. upgrade(req, res, socket)
+    let { headers, method, url, statusCode, statusMessage, httpVersion } = request || {};
+    nodeSocket.headers = headers;
+    nodeSocket.contentType = headers['content-type'];
+    nodeSocket.ua = headers['user-agent'];
+    // TBD if these will be helpful.
+    nodeSocket.method = method;
+    nodeSocket.url = url;
+    nodeSocket.statusCode = statusCode;
+    nodeSocket.statusMessage = statusMessage;
+    nodeSocket.httpVersion = httpVersion;
+    // remoteAddress will be set to reverse proxy in connection, but request/upgrade gives us this header
+    remoteAddress = headers['x-real-ip'] || remoteAddress;
+  };
+  nodeSocket.remote = {
+    remoteAddress, remotePort, remoteFamily,
+  };
+
+  // let id = Symbol('Socket#####'); // not stringable..
+  if (!nodeSocket.id) {
+    let r = `${Math.floor(Math.random()*9999)}`.padStart(' ', 4);
+    let id = `Connection(${r})`;
+    nodeSocket.id = id;
+    nodeSocket.requests = 0;
+  } else {
+    nodeSocket.requests += 1;
+  }
+}
+
+
+
+function shouldBlock(request, response, nodeSocket) {
+  let blockedIPs = (process.env.BLOCKED_IPV4 || '').split(';');
+  if (blockedIPs.indexOf(nodeSocket.ip) !== -1) {
+    return true;
+  }
+
+  let blockedUserAgents = [
+    'Cloud mapping experiment. Contact research@pdrlabs.net',
+  ];
+
+  return false;
+}
+
+async function handleBlock(request, response=null, nodeSocket) {
+  return new Promise(function(resolve, reject) {
+    let { httpVersion } = nodeSocket;
+    let msg = `HTTP ${httpVersion} / Bad Request`;
+    setTimeout(() => {
+      if (response) {
+        // response.write(msg);
+        response.end(msg, () => {
+          resolve();
+        });
+      } else {
+        // nodeSocket.write(msg);
+        nodeSocket.end(msg, () => {
+          resolve();
+        });
+      }
+      // Can't callback, this is a ReadableStream
+      request.destroy();
+    }, 1000);
+  });
+}
+
+
 function sha1Hash(value, type='binary', base='base64') {
   return crypto.createHash('sha1').update(value, type).digest(base);
 }
