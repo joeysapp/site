@@ -108,10 +108,20 @@ function NetSocket({
   nodeSocket.on('data', async function(data) {
     // log('data', `\n${what(data, { compact: false })}`);
     // log('data', `\n${what(nodeSocket, { showHidden: false, compact: false })}`);
-    const { headers } = nodeSocket;
-    log('data', `\n${what(headers)}`);
-    let proto = Proto.prototype.fromFrame(data);
-    log('data', `\n${what(proto, { compact: false })}`);
+    const { headers, id, contentType } = nodeSocket;
+    // log('data', `\n${what(headers)}`);
+    // log('data', contentType);
+    let weUpgradedThisSocketAlready = false;
+    if (headers['sec-websocket-protocol'] === 'proto.joeys.app.utf8') {
+      let proto = Proto.prototype.fromFrame(data);
+      if (proto.readBigInt64BE) {
+        proto = data.toString('utf8');
+      }
+      log('data', `\n${what(proto, { compact: false })}`);
+    } else {
+      let string = data.toString('utf8');
+      log('data', `\n${what(string, { compact: false })}`);      
+    }
   });
   nodeSocket.on('read', function() { log('read'); });
 
