@@ -191,7 +191,10 @@ function NetSocket({
 
     // After .on(close), our server and the socket will no longer be bound.
     const { address = '--', port = '--', family = '--' } = nodeSocket.address();
-    const { remoteAddress, remotePort, remoteFamily } = nodeSocket;   
+    // Our reverse proxy will be shown here, so look at remote that we set in http-server/bindSocket
+    let { remote = {} } = nodeSocket;    
+    let { remoteAddress, remotePort, remoteFamily } = remote;
+
     let application = nodeSocket.encrypted ? 'tls' : 'net';
     const _NETWORK_LAYERS = {
       ...NETWORK_LAYERS,
