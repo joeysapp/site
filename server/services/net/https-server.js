@@ -209,6 +209,8 @@ function bindSocket(request = null, response = null, nodeSocket = null) {
     // 2. request(req, res, socket)
     // 2. upgrade(req, res, socket)
     let { headers, method, url, statusCode, statusMessage, httpVersion } = request || {};
+    let { accept, dnt, host, origin, upgrade, pragma } = headers;
+
     nodeSocket.headers = headers;
     nodeSocket.contentType = headers['content-type'];
     nodeSocket.ua = headers['user-agent'];
@@ -239,8 +241,19 @@ function bindSocket(request = null, response = null, nodeSocket = null) {
 
 
 function shouldBlock(request, response, nodeSocket) {
+  let { headers, method, url, statusCode, statusMessage, httpVersion } = request || {};
+  let { accept, dnt, host, origin, upgrade, pragma } = headers;
+  let ip = headers['x-real-ip'] || nodeSocket.ip;
+  let protocol = headers['x-forwarded-proto']; // https;
+  
+  // Prevent any get/posts to the IP entirely (nginx could/should probably do this)
+  // It'll be IP:WS_SOCKET_PORT for the ws forwarding
+  if (host === process.env.SITE_ADDRESS) {
+    return true;
+  }
+
   let blockedIPs = (process.env.BLOCKED_IPV4 || '').split(';');
-  if (blockedIPs.indexOf(nodeSocket.ip) !== -1) {
+  if (blockedIPs.indexOf(ip) !== -1) {
     return true;
   }
 
