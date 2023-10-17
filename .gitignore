@@ -1,5 +1,5 @@
 common
 files
-.env.deploy .env.local
-.env*
 .gitmodules
+.env*
+local-frontend

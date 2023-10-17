@@ -367,7 +367,7 @@ function Files() {
 
     if (ext === '' && name === '') {
       res.writeHead(200);
-	res.write(LandingPage());
+      res.write(LandingPage());
       res.end();
       return;
     }

@@ -7,6 +7,7 @@ const NETWORK_LAYERS = {
 
 const DEBUG = process.env.DEBUG;
 
+
 function NetSocket({
   id = 'NetSocket',
 
@@ -94,7 +95,7 @@ function NetSocket({
       log('readable', 'All chunks streamed in and socket.readyState=open');
     } else {
       log('readable', `All chunks streamed in and socket.readyState=${nodeSocket.readyState} (..we already wrote to it? and it's ending?)`);
-      setData();
+      setDataToString();
     }
   });
 
@@ -125,7 +126,7 @@ function NetSocket({
       }, {}),
       data,
     };
-    log('setDataToString()');
+    log('setDataToString()', `${what(data)}`);
   }
   nodeSocket.on('end', function() {
     log('end');

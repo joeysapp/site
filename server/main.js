@@ -28,7 +28,7 @@ function RootServer() {
 
     onRequest: function(request, response, netSocket) {
       let { url, method, headers } = request;    
-      log(id, 'request', `${method.toLowerCase()} ${url}`);
+      log(id, 'request', `${method.toLowerCase()} ${url} but the underlying http-server is doing everything/`);
 
       // [todo] This should be a thennable, but it's just piping to response and holding in memcache for now.
       files.getFile(request, response);

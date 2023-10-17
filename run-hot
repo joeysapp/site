@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-find * | entr -s "./scripts/boot.sh .env.deploy"
+find server/* | entr -r ./scripts/boot.sh .env.deploy

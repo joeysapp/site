@@ -47,14 +47,6 @@ function HttpsServer({
     const { remoteAddress, remotePort, remoteFamily } = nodeSocket;
     const remote = { remoteAddress, remotePort, remoteFamily };
     log(remote, `connection`);
-    onConnection && onConnection(netSocket);
-  });
-
-  _httpsServer.addListener('request', function(request, response) {
-    let { socket: nodeSocket } = request;
-    const { remoteAddress, remotePort, remoteFamily } = nodeSocket;
-    const remote = { remoteAddress, remotePort, remoteFamily };
-    log(remote, 'request');
 
     let netSocket = new NetSocket({
       nodeSocket,
@@ -65,10 +57,22 @@ function HttpsServer({
       onFinish: onSocketFinish,
       onClose: onSocketClose,
     });
+    onConnection && onConnection(netSocket);
+  });
+
+  _httpsServer.addListener('request', function(request, response) {
+    let { socket: nodeSocket, headers, method, url, statusCode, statusMessage, httpVersion } = request;
+    const { remoteAddress, remotePort, remoteFamily } = nodeSocket;
+    const remote = { remoteAddress, remotePort, remoteFamily };
 
     let id = Math.floor(Math.random()*100000);
-    const { method, url, statusMessage, statusCode, headers, httpVersion, } = request;
-    log(remote, 'request', `NetSocket<#${id}> ${method} ${url}`);
+    let printObj = { headers, url, method, statusCode, statusMessage, httpVersion };
+    log(remote, 'request', `\n${what(printObj, { compact: false })}`);
+
+    // TBD if we want to be setting up our socket with listeners in connection or here..
+    // I recall there was a problem with setting up event listeners in connection,
+    // but (hopefully) that was an https/tls thing?
+    let netSocket = nodeSocket;
 
     request.addListener('aborted', function(close) {
       log(remote, 'req(req.aborted)', `<${id}> request aborted ${close}` );
@@ -91,7 +95,14 @@ function HttpsServer({
       log(remote, 'req(res.close)', `after <${id}>.end(), deleting socket`);
       onResponseClose && onResponseClose(request, response, netSocket);
     });
+
     onRequest && onRequest(request, response, netSocket);
+  });
+
+  _httpsServer.on('upgrade', function(request, nodeSocket, head) {
+    log({}, 'upgrade', '[todo] Bring back in the handshake stuff');
+    nodeSocket.write("500 / Error");
+    nodeSocket.end();
   });
 
   _httpsServer.on('listening', function() { log({}, 'listening'); });
