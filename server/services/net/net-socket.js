@@ -14,7 +14,9 @@ const DEBUG = process.env.DEBUG;
 function NetSocket({
   nodeSocket = {},
   // request = {},
+  // response = {},
 
+  onData,
   onResume,
   onReadable,
   onRead,
@@ -105,21 +107,48 @@ function NetSocket({
     }
   });
 
-  nodeSocket.on('data', async function(data) {
+  nodeSocket.on('data', async function(buffer) {
     const { headers, id, contentType } = nodeSocket;
 
     let weUpgradedThisSocketAlready = false;
+    let msg = null;
     if (headers['sec-websocket-protocol'] === 'proto.joeys.app.utf8') {
-      let proto = Proto.prototype.fromFrame(data);
+      msg = Proto.prototype.fromFrame(buffer);
       // This is lazy, lmao
-      if (proto.readBigInt64BE) {
-        proto = data.toString('utf8');
+      if (msg.readBigInt64BE) {
+        msg = buffer.toString('utf8');        
       }
-      log('data', `\n${what(proto, { compact: false })}`);
+      log('data', `\n${what(msg, { compact: false })}`);
     } else {
-      let string = data.toString('utf8');
-      log('data', `\n${what(string, { compact: false })}`);      
+      // Likely just a HTTP request - but it MAY contain a payload at 
+      let string = buffer.toString('utf8');
+      let requestRows = string.split('\r\n');
+      let signature = requestRows.shift().toLowerCase();
+    let payload = requestRows.pop();
+      try {
+        payload = JSON.parse(payload);
+      } catch {}
+    requestRows.pop();
+    let headers = requestRows.reduce((acc, header, idx) => {
+      let [key, val] = header.split(': ');
+      return {
+        ...acc,
+        [key]: val,
+      };
+    }, {});
+      let auth = headers['Authorization'] || 'Anonymous';
+    msg = {
+      // headers,
+      auth,
+      signature,
+      payload,
+
+    };
+      log('data', `\n${what(msg, { compact: false })}`);      
     }
+    if (onData) {
+      onData(nodeSocket.request, nodeSocket.response, nodeSocket, msg);      
+      }
   });
   nodeSocket.on('read', function() { log('read'); });
 
@@ -213,4 +242,3 @@ function NetSocket({
   return nodeSocket;
 }
 export default NetSocket;
-

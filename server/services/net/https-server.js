@@ -29,6 +29,7 @@ function HttpsServer({
   onResponseFinish = function(request, response, netSocket) { DEBUG && console.log('onResponseFinish'); },
   onResponseClose = function(request, response, netSocket) { DEBUG && console.log('onResponseClose'); },
 
+  onSocketData,
   onSocketResume,
   onSocketReadable,
   onSocketRead,
@@ -62,6 +63,7 @@ function HttpsServer({
     // but we might want to extend them, I guess. So just keep track of the netSOcket?
     let netSocket = new NetSocket({
       nodeSocket,
+      onData: onSocketData,
       onResume: onSocketResume,
       onReadable: onSocketReadable,
       onRead: onSocketRead,
@@ -77,7 +79,6 @@ function HttpsServer({
     // let { socket: nodeSocket, headers, method, url, statusCode, statusMessage, httpVersion } = request;
     let { socket: nodeSocket, data } = request;
     bindSocket(request, response, nodeSocket);
-
 
     let netSocket = nodeSocket;
     let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;
@@ -223,6 +224,8 @@ function bindSocket(request = null, response = null, nodeSocket = null) {
   // 1. connection(null, null, nodeSocket);
   let { remoteAddress, remotePort, remoteFamily } = nodeSocket;
   if (request) {
+    nodeSocket.request = request;
+    nodeSocket.response = response;
     // 2. request(req, res, socket)
     // 2. upgrade(req, res, socket)
     let { headers, method, url, statusCode, statusMessage, httpVersion } = request || {};
