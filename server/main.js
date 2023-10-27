@@ -37,7 +37,12 @@ function RootServer() {
 
       // These would just be like, a loaded in module we pass the data to I think?
       if (host === 'osrs.joeys.app') {
-        let { signature, auth, payload } = data;
+        let { signature, auth, payload = '' } = data;
+
+        payload = payload.map(msgObject => {
+          return { auth, ...msgObject };
+        });
+
         let logFile = path.resolve('/Users/zooey/Documents/code/site/files/text/salmon_log.csv');
         let logStream = fs.createWriteStream(logFile, { flags: 'a' });
 
