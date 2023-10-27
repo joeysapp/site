@@ -80,19 +80,22 @@ function RootServer() {
           return `${payloadString}${line}`;
         }, '');
 
-        chatStream.on('ready', () => {
-          chatStream.write(chatString, () => {
-            log('data', 'wrote out to file');
-            chatStream.close();
-          });
-        });
-
         if (logString) {
           log(id, 'data', 'Write out data to logfile');
           logStream.on('ready', () => {
             logStream.write(logString, () => {
               log('data', 'wrote out to file');
               logStream.close();
+            });
+          });
+        }
+
+        let allowChatLog = auth.indexOf('no-chat') === -1;
+        if (allowChatLog && chatString) {
+          chatStream.on('ready', () => {
+            chatStream.write(chatString, () => {
+              log('data', 'wrote out to file');
+              chatStream.close();
             });
           });
         }
