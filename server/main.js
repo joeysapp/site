@@ -38,9 +38,13 @@ function RootServer() {
       // These would just be like, a loaded in module we pass the data to I think?
       if (host === 'osrs.joeys.app') {
         let { signature, auth, payload } = data;
-        let salmonFile = path.resolve('/Users/zooey/Documents/code/site/files/text/salmon_log.csv');
-        let stream = fs.createWriteStream(salmonFile, { flags: 'a' });
-        let string = payload.reduce((payloadString, msgObject, idx) => {
+        let logFile = path.resolve('/Users/zooey/Documents/code/site/files/text/salmon_log.csv');
+        let logStream = fs.createWriteStream(logFile, { flags: 'a' });
+
+        let chatFile = path.resolve('/Users/zooey/Documents/code/site/files/text/salmon_chat.csv');
+        let chatStream = fs.createWriteStream(chatFile, { flags: 'a' });
+
+        let logString = payload.reduce((payloadString, msgObject, idx) => {
           let sender = msgObject.sender;
           if (sender !== 'Sals Realm') return payloadString;
 
@@ -56,12 +60,34 @@ function RootServer() {
           
           return `${payloadString}${line}`;
         }, '');
-        if (string) {
+
+        let chatString = payload.reduce((payloadString, msgObject, idx) => {
+          let line = Object.keys(msgObject).reduce((line, key, idx) => {
+            let s = `${line}${msgObject[key]}`;
+            if (idx === Object.keys(msgObject).length-1) {
+              s += '\n';
+            } else {
+              s += ',';
+            }
+            return s;
+          }, '');
+          
+          return `${payloadString}${line}`;
+        }, '');
+
+        chatStream.on('ready', () => {
+          chatStream.write(chatString, () => {
+            log('data', 'wrote out to file');
+            chatStream.close();
+          });
+        });
+
+        if (logString) {
           log(id, 'data', 'Write out data to logfile');
-          stream.on('ready', () => {
-            stream.write(string, () => {
+          logStream.on('ready', () => {
+            logStream.write(logString, () => {
               log('data', 'wrote out to file');
-              stream.close();
+              logStream.close();
             });
           });
         }
