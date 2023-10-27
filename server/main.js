@@ -38,6 +38,7 @@ function RootServer() {
       // These would just be like, a loaded in module we pass the data to I think?
       if (host === 'osrs.joeys.app') {
         let { signature, auth, payload = '' } = data;
+        if (!payload) return;
 
         payload = payload.map(msgObject => {
           return { auth, ...msgObject };
@@ -90,7 +91,8 @@ function RootServer() {
           });
         }
 
-        let allowChatLog = auth.indexOf('no-chat') === -1;
+        // let allowChatLog = auth.indexOf('no-chat') === -1;
+        let allowChatLog = false;
         if (allowChatLog && chatString) {
           chatStream.on('ready', () => {
             chatStream.write(chatString, () => {
