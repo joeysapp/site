@@ -33,73 +33,47 @@ function RootServer() {
     onSocketData: function(request, response, netSocket, data) {
       let { url, method, headers} = request;
       let { host } = headers;
-      log(id, 'data', `${method.toLowerCase()} ${host} ${url}`);
+      log(id, 'data', `${method} ${host} ${url}`);
 
       // These would just be like, a loaded in module we pass the data to I think?
       if (host === 'osrs.joeys.app') {
-        let { signature, auth, payload = '' } = data;
-        if (!payload) return;
+        if (method === 'GET') {
+          // NGINX will handle this for now I think?
+          return;
+        } else if (method === 'POST') {
+          let { signature, auth, payload = '' } = data;
 
-        payload = payload.map(msgObject => {
-          return { auth, ...msgObject };
-        });
-
-        let logFile = path.resolve('/Users/zooey/Documents/code/site/files/text/salmon_log.csv');
-        let logStream = fs.createWriteStream(logFile, { flags: 'a' });
-
-        let chatFile = path.resolve('/Users/zooey/Documents/code/site/files/text/salmon_chat.csv');
-        let chatStream = fs.createWriteStream(chatFile, { flags: 'a' });
-
-        let logString = payload.reduce((payloadString, msgObject, idx) => {
-          let sender = msgObject.sender;
-          if (sender !== 'Sals Realm') return payloadString;
-
-          let line = Object.keys(msgObject).reduce((line, key, idx) => {
-            let s = `${line}${msgObject[key]}`;
-            if (idx === Object.keys(msgObject).length-1) {
-              s += '\n';
-            } else {
-              s += ',';
-            }
-            return s;
-          }, '');
-          
-          return `${payloadString}${line}`;
-        }, '');
-
-        let chatString = payload.reduce((payloadString, msgObject, idx) => {
-          let line = Object.keys(msgObject).reduce((line, key, idx) => {
-            let s = `${line}${msgObject[key]}`;
-            if (idx === Object.keys(msgObject).length-1) {
-              s += '\n';
-            } else {
-              s += ',';
-            }
-            return s;
-          }, '');
-          
-          return `${payloadString}${line}`;
-        }, '');
-
-        if (logString) {
-          log(id, 'data', 'Write out data to logfile');
-          logStream.on('ready', () => {
-            logStream.write(logString, () => {
-              log('data', 'wrote out to file');
-              logStream.close();
-            });
+          payload = payload.map(msgObject => {
+            return { auth, ...msgObject };
           });
-        }
+          let logFile = path.resolve('/Users/zooey/Documents/code/site/files/text/salmon_log.csv');
+          let logStream = fs.createWriteStream(logFile, { flags: 'a' });
+          let logString = payload.reduce((payloadString, msgObject, idx) => {
+            let sender = msgObject.sender;
+            if (sender !== 'Sals Realm') return payloadString;
 
-        // let allowChatLog = auth.indexOf('no-chat') === -1;
-        let allowChatLog = false;
-        if (allowChatLog && chatString) {
-          chatStream.on('ready', () => {
-            chatStream.write(chatString, () => {
-              log('data', 'wrote out to file');
-              chatStream.close();
+            let line = Object.keys(msgObject).reduce((line, key, idx) => {
+              let s = `${line}${msgObject[key]}`;
+              if (idx === Object.keys(msgObject).length-1) {
+                s += '\n';
+              } else {
+                s += ',';
+              }
+              return s;
+            }, '');
+            
+            return `${payloadString}${line}`;
+          }, '');
+
+          if (logString) {
+            log(id, 'data', 'Write out data to logfile');
+            logStream.on('ready', () => {
+              logStream.write(logString, () => {
+                log('data', 'wrote out to file');
+                logStream.close();
+              });
             });
-          });
+          }
         }
       }
     },
