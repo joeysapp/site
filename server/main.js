@@ -24,7 +24,8 @@ show_files();
 
 function RootServer() {
   let id = 'RootServer';
-  let siteUsers = [];
+  // let siteUsers = [];
+  // Gonna guess for now we should just track connections outside of the http-server type
 
   let server = new HttpsServer({
     id,
@@ -37,18 +38,28 @@ function RootServer() {
       log(id, 'data', `${method} ${host} ${url}`);
 
       // These would just be like, a loaded in module we pass the data to I think?
+      // Hmm. Should we try to have this in request...? no... that's way slower..
       if (host === 'osrs.joeys.app') {
-        oldschoolHost(request, response, netSocket, data)
-          .then((internal_message) => {
-            // assume all the writing/ending has been done
-            if (request.somehow_not_ended) {
-              request.end();
-            }
-          }).catch((err) => {
-            // request.write(err);
-            response.end();
-          });
+        if (method === 'POST') {
+          oldschoolRequest(request, response, netSocket, data)
+              .then((internal_message) => {
+                // assume all the writing/ending has been done
+                if (request.somehow_not_ended) {
+                  request.end();
+                }
+              }).catch((err) => {
+                // request.write(err);
+                response.end();
+              });
         }
+        return;
+      }
+
+      // .. *I BELIEVE* the rest of the hosts should be internally proxieid...?
+      // So I think a given netSocket needs to set their initial host otherwise idk how we know where the data/proto needs to go
+      log(id, 'data', 'None of the hosts were hit, so this is likely an internal redirect?... ');
+      log(id, 'data', ` Connections.length: ${this}`);
+      oldschoolSocket(request, response, netSocket, data);
     },
 
     // There may be multiple requests over a single connection 

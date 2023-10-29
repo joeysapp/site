@@ -1,3 +1,7 @@
+import {
+  log, fg, what, numToBytes,
+} from '../../../common/utils/index.mjs';
+
 // import AchievementLogger from './achievement-logger';
 
 // This will be handling after our https-server has upgraded a connection.
@@ -10,6 +14,7 @@ function oldschoolSocket(request, response, netSocket, data) {
 // This will only be handling POSTS - the get to osrs.joeys.app/* will go to nginx,
 // which will just place them on the base index.html (?) ... custom views?
 function oldschoolRequest(request, response, netSocket, data) {
+  let id = 'oldschoolRequest';
   return new Promise((resolve, reject) => {
     // TBD if we want these async, or just do all stuff manually (e.g. netSocket.write(new Proto) here, and somehow b
     let { url, method, headers } = request;
@@ -25,7 +30,8 @@ function oldschoolRequest(request, response, netSocket, data) {
       // return;
     } else if (method === 'POST') {
       let { signature, auth, payload = '' } = data;
-      
+      log(id, `${auth} ${signature}\n ${payload}`);
+
       if (typeof payload === 'object' && payload.length > 0) {
         payload = payload.map(msgObject => {
           return { auth, ...msgObject };
@@ -45,7 +51,7 @@ function oldschoolRequest(request, response, netSocket, data) {
       let logStream = fs.createWriteStream(logFile, { flags: 'a' });
       let logString = payload.reduce((payloadString, msgObject, idx) => {
         let sender = msgObject.sender;
-        if (sender !== 'Sals Realm') return payloadString;
+        // if (sender !== 'Sals Realm') return payloadString;
 
         let line = Object.keys(msgObject).reduce((line, key, idx) => {
           let s = `${line}${msgObject[key]}`;
@@ -64,7 +70,7 @@ function oldschoolRequest(request, response, netSocket, data) {
         log(id, 'data', 'Write out data to logfile');
         logStream.on('ready', () => {
           logStream.write(logString, () => {
-            log('data', 'wrote out to file');
+            log(id, 'data', 'wrote out to file');
             logStream.close();
             resolve();
           });
@@ -73,7 +79,7 @@ function oldschoolRequest(request, response, netSocket, data) {
     }
   });
 }
-export default {
+export {
   oldschoolSocket,
   oldschoolRequest,
 };

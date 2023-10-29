@@ -148,7 +148,7 @@ function NetSocket({
     }
     if (onData) {
       onData(nodeSocket.request, nodeSocket.response, nodeSocket, msg);      
-      }
+    }
   });
   nodeSocket.on('read', function() { log('read'); });
 

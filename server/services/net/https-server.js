@@ -46,6 +46,7 @@ function HttpsServer({
 
   let connections = {
     // If we use symbols as keys, how can we handle hot r... whatever
+    // .. Should this be in an above handler..
   };
 
   _httpsServer.addListener('connection', function(nodeSocket) {
