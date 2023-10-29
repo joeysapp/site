@@ -1,9 +1,15 @@
 // import AchievementLogger from './achievement-logger';
 
+// This will be handling after our https-server has upgraded a connection.
+// They largely will emit .data events as Protos.
+function oldschoolSocket(request, response, netSocket, data) {
+  
+
+}
 
 // This will only be handling POSTS - the get to osrs.joeys.app/* will go to nginx,
 // which will just place them on the base index.html (?) ... custom views?
-function oldschoolHost(request, response, netSocket, data) {
+function oldschoolRequest(request, response, netSocket, data) {
   return new Promise((resolve, reject) => {
     // TBD if we want these async, or just do all stuff manually (e.g. netSocket.write(new Proto) here, and somehow b
     let { url, method, headers } = request;
@@ -67,4 +73,7 @@ function oldschoolHost(request, response, netSocket, data) {
     }
   });
 }
-export default oldschoolHost;
+export default {
+  oldschoolSocket,
+  oldschoolRequest,
+};

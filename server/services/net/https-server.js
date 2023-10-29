@@ -162,7 +162,7 @@ function HttpsServer({
       .then((something) => {
         log({}, 'upgrade', `[todo] Then we do something with this WebSocket`);
         // [todo] Add to connection pool
-
+        // .... Figure out how to do this with separate hosts, handle connections externally, etc.
       }).catch((error) => {
         log({}, 'upgrade', `[ERR] ${error}`);
         nodeSocket.write("500 / Error");

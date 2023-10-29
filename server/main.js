@@ -13,7 +13,7 @@ import {
   show_sockets, show_network_layers, show_http, show_init, show_files, show_time,
 } from '../common/utils/index.mjs';
 
-import oldschoolHost from './services/oldschool/index.js';
+import { oldschoolRequest, oldschoolSocket } from './services/oldschool/index.js';
 
 // show_network_layers();
 show_sockets();
@@ -30,7 +30,6 @@ function RootServer() {
     id,
     host: process.env.SITE_ADDRESS,
     port: process.env.SITE_HTTPS_PORT,
-
 
     onSocketData: function(request, response, netSocket, data) {
       let { url, method, headers} = request;
