@@ -8,11 +8,13 @@ import {
   // Database,
   HttpsServer,
 } from './services/index.js';
-
 import {
   log, fg, what, numToBytes,
   show_sockets, show_network_layers, show_http, show_init, show_files, show_time,
 } from '../common/utils/index.mjs';
+
+import oldschoolHost from './services/oldschool/index.js';
+
 // show_network_layers();
 show_sockets();
 show_http();
@@ -37,51 +39,24 @@ function RootServer() {
 
       // These would just be like, a loaded in module we pass the data to I think?
       if (host === 'osrs.joeys.app') {
-        if (method === 'GET') {
-          // NGINX will handle this for now I think?
-          return;
-        } else if (method === 'POST') {
-          let { signature, auth, payload = '' } = data;
-
-          payload = payload.map(msgObject => {
-            return { auth, ...msgObject };
+        oldschoolHost(request, response, netSocket, data)
+          .then((internal_message) => {
+            // assume all the writing/ending has been done
+            if (request.somehow_not_ended) {
+              request.end();
+            }
+          }).catch((err) => {
+            // request.write(err);
+            response.end();
           });
-          let logFile = path.resolve('/Users/zooey/Documents/code/site/files/text/salmon_log.csv');
-          let logStream = fs.createWriteStream(logFile, { flags: 'a' });
-          let logString = payload.reduce((payloadString, msgObject, idx) => {
-            let sender = msgObject.sender;
-            if (sender !== 'Sals Realm') return payloadString;
-
-            let line = Object.keys(msgObject).reduce((line, key, idx) => {
-              let s = `${line}${msgObject[key]}`;
-              if (idx === Object.keys(msgObject).length-1) {
-                s += '\n';
-              } else {
-                s += ',';
-              }
-              return s;
-            }, '');
-            
-            return `${payloadString}${line}`;
-          }, '');
-
-          if (logString) {
-            log(id, 'data', 'Write out data to logfile');
-            logStream.on('ready', () => {
-              logStream.write(logString, () => {
-                log('data', 'wrote out to file');
-                logStream.close();
-              });
-            });
-          }
         }
-      }
     },
 
+    // There may be multiple requests over a single connection 
     onRequest: function(request, response, netSocket) {
       let { url, method, headers } = request;
       let { host } = headers;
-      log(id, 'request', `${method.toLowerCase()} ${host} ${url} `);
+      log(id, 'request', `${method} ${host} ${url} `);
 
       // [todo] This should be a thennable, but it's just piping to response and holding in memcache for now.
       if (method.toLowerCase() === 'get') {
@@ -92,14 +67,20 @@ function RootServer() {
         //   }).catch((err) => {
         // 
         //   });        
-      } else {
+      } else if (method === 'POST') {
         // https://www.rfc-editor.org/rfc/rfc9110.html#section-15.3.1
-        
-        response.writeHead(200);
-        response.end('HTTP 1.0 / 200 OK', () => {
-          request.destroy();
+
+        // Assume this was handled in ___Host behavior...?
+        response.end(null, () => {
           netSocket.destroy();
+          request.destroy();
         });
+
+        // response.writeHead(200);
+        // response.end('HTTP 1.0 / 200 OK', () => {
+        //   request.destroy();
+        //   netSocket.destroy();
+        // });
       }
     },
   });
