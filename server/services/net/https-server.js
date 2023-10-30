@@ -17,6 +17,11 @@ const NETWORK_LAYERS = {
   remoteAddress: '', remotePort: '', localAddress: '', localPort: '',
 };
 
+// IP addresses to lists of connected (possibly tls) sockets
+let connections = {
+  // '127.0.0.1': [],
+};
+
 function HttpsServer({
   id,
   host,
@@ -38,30 +43,21 @@ function HttpsServer({
   onSocketClose = function(netSocket, data) { DEBUG && console.log('onSocketClose', `${netSocket.net_socket_id}\n  ${what(data)}`); },
 }) {
   let _httpsServer;
-  _httpsServer = http.createServer();
-
-  const netSockets = {};
-  let _id = '${label}<'+`${port}`.padStart(5, ' ')+'-'+`${Object.keys(netSockets).length}`.padStart(3, ' ') +'>';
+  let _id;
+  _httpsServer = http.createServer({
+    keepAliveTimeout: 0,
+    requestTimeout: 0,
+    headersTimeout: 0,
+  });
   log({}, 'init');
 
-  let connections = {
-    // If we use symbols as keys, how can we handle hot r... whatever
-    // .. Should this be in an above handler..
-  };
-
   _httpsServer.addListener('connection', function(nodeSocket) {
-    // const { remoteAddress, remotePort, remoteFamily } = nodeSocket;
-    // const remote = { remoteAddress, remotePort, remoteFamily };
-
-    // Their headers have to be read in via .readable->.data->(request/upgrade)
     bindSocket(null, null, nodeSocket);
-
+    nodeSocket.setKeepAlive(true);
     let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;
-    let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests };
-    log(remote, `connection`, `Populated socket.remote w/o headers -> new ${id}\n${what(printObj, {compact: false})}`);
+    log(remote, 'connection');
 
-    // This is largely a wrapper for the actual nodesocket... adding in basic handlers..
-    // but we might want to extend them, I guess. So just keep track of the netSOcket?
+    // Wrapper for the actual nodesocket, adding in basic handlers
     let netSocket = new NetSocket({
       nodeSocket,
       onData: onSocketData,
@@ -72,16 +68,15 @@ function HttpsServer({
       onFinish: onSocketFinish,
       onClose: onSocketClose,
     });
-    connections[id] = netSocket;
     onConnection && onConnection(netSocket);
   });
 
   _httpsServer.addListener('request', function(request, response) {
-    // let { socket: nodeSocket, headers, method, url, statusCode, statusMessage, httpVersion } = request;
+    // Bind socket setting ID and other items
     let { socket: nodeSocket, data } = request;
     bindSocket(request, response, nodeSocket);
-
     let netSocket = nodeSocket;
+
     let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;
     let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests, data };
     log(remote, 'request', `\n${what(printObj, { compact: false })}`);
@@ -96,46 +91,46 @@ function HttpsServer({
     }
 
     request.addListener('socket', function(nodeSocket) {
-      log(remote, 'req(req.socket)', `<${id}> nodeSocket` );
+      log(remote, 'req(req.socket)', `${id} nodeSocket` );
     });
-    request.addListener('aborted', function(close) {
-      log(remote, 'req(req.aborted)', `<${id}> request aborted ${close}` );
+    request.addListener('aborted', function() {
+      log(remote, 'req(req.aborted)', `${id} req aborted` );
     });
-    request.addListener('close', function(close) {
-      log(remote, 'req(req.close)', `<${id}> request closing ${close}` );
+    request.addListener('close', function() {
+      log(remote, 'req(req.close)', `${id} req closing` );
     });   
+    request.addListener('end', function() {
+      log(remote, 'req(req.end)', `${id}` );
+    });   
+
     response.addListener('finish', function () {
-      log(remote, 'req(res.finish)', `after <${id}>.end()`);
+      log(remote, 'req(res.finish)', `after ${id}.end()`);
       onResponseFinish && onResponseFinish(request, response, netSocket);
     });
     response.addListener('prefinish', function () {
-      log(remote, 'req(res.prefinish)', `<${id}>`);
+      log(remote, 'req(res.prefinish)', `${id}`);
       onResponsePrefinish && onResponsePrefinish(request, response, netSocket);
     });
     response.addListener('drain', function () {
-      log(remote, 'req(res.drain)', `<${id}>`);
+      log(remote, 'req(res.drain)', `${id}`);
+    });
+    response.addListener('end', function () {
+      log(remote, 'req(res.end)', `${id}`);
     });
     response.addListener('close', function () {
-      log(remote, 'req(res.close)', `after <${id}>.end(), deleting socket`);
+      log(remote, 'req(res.close)', `after ${id}.end()`);
       onResponseClose && onResponseClose(request, response, netSocket);
     });
 
-    // I think this is where external stuff would do whatever with the request, right?
-    // .... hmm
-    // onRequest(request, response, netSocket)
-    //  .then((what? like, success? messagecode, etc?) => {
-    //     response.writeHead(messageCode);
-    //     response.write(data);
-    // }).
     if (onRequest) {
-      onRequest(request, response, netSocket);
+      onRequest(request, response, nodeSocket);
     } else {
-      log('request', 'uhhhhhhh should we close now?');
+      log(remote, 'request', 'closing + destroying');
       // https://www.rfc-editor.org/rfc/rfc9110.html#section-15.3.1
       response.writeHead(200);
-      response.end('HTTP 1.0 / 200 OK', () => {
+      response.end(null, () => {
+        nodeSocket.destroy();
         request.destroy();
-        netSocket.destroy();
       });
     }
   });
@@ -143,13 +138,11 @@ function HttpsServer({
   _httpsServer.on('upgrade', function(request, nodeSocket, head) {
     bindSocket(request, null, nodeSocket);
 
-    let netSocket = nodeSocket;
-    let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;
-    let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests };
-    
-    // ehhh
-    nodeSocket.contentType = headers['sec-websocket-protocol'];
-    log(remote, 'upgrade', `\n${what(printObj, { compact: false })}`);
+    // [todo] Seeing if we need to do request.setSocketKeepAlive() too?
+    // nodeSocket.setKeepAlive(true);
+    let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests, contentType } = nodeSocket;
+        let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests, contentType };
+    log(remote, 'upgrade', `\n${what(printObj, { compact: true })}`);
 
     if (shouldBlock(request, null, nodeSocket)) {
       handleBlock(request, null, nodeSocket)
@@ -208,58 +201,62 @@ function HttpsServer({
       internet: remoteAddress ? remoteFamily : family,
       ...remote,
     };
-    _id = `${id}:`+`${port}`.padEnd(5, ' ')+'['+`${Object.keys(netSockets).length}]`.padStart(3, ' ') +'';
+    _id = `${id}[${Object.keys(connections).length}`.padStart(3, ' ')+']';
     _log(_NETWORK_LAYERS, _id, a, b, c, d)
   };
   return _httpsServer; 
 }
 export default HttpsServer;
 
-
 // TBD where these functions should go
-
 // Is fired on: 
 // 1. connection            (null,              null, nodeSocket)
 // 2. request OR upgrade    (req = { headers }, res, nodeSocket)
 function bindSocket(request = null, response = null, nodeSocket = null) {
   // 1. connection(null, null, nodeSocket);
   let { remoteAddress, remotePort, remoteFamily } = nodeSocket;
-  if (request) {
+  let { headers = {}, method, url, statusCode, statusMessage, httpVersion } = request || {};
+  let { accept, dnt, host, origin, upgrade, pragma } = headers;
+  // _log('bindSocket', `\n\nheaders=${what(headers)}\n\n`);
+
+  if (request) {   
     nodeSocket.request = request;
     nodeSocket.response = response;
-    // 2. request(req, res, socket)
-    // 2. upgrade(req, res, socket)
-    let { headers, method, url, statusCode, statusMessage, httpVersion } = request || {};
-    let { accept, dnt, host, origin, upgrade, pragma } = headers;
-
     nodeSocket.headers = headers;
-    nodeSocket.contentType = headers['content-type'];
+    nodeSocket.contentType = headers['sec-websocket-protocol'] || headers['content-type'];
     nodeSocket.ua = headers['user-agent'];
-    // TBD if these will be helpful.
+
+    // TBD if these will be helpful:
     nodeSocket.method = method;
     nodeSocket.url = url;
     nodeSocket.statusCode = statusCode;
     nodeSocket.statusMessage = statusMessage;
     nodeSocket.httpVersion = httpVersion;
-    // remoteAddress will be set to reverse proxy in connection, but request/upgrade gives us this header
-    remoteAddress = headers['x-real-ip'] || remoteAddress;
-  };
-  nodeSocket.remote = {
-    remoteAddress, remotePort, remoteFamily,
-  };
 
-  // let id = Symbol('Socket#####'); // not stringable..
-  if (!nodeSocket.id) {
-    let r = `${Math.floor(Math.random()*9999)}`.padStart(' ', 4);
-    let id = `Connection(${r})`;
+    // remoteAddress will be set to reverse proxy in connection, but request/upgrade gives us this header
+    nodeSocket.remote = {
+      remotePort, remoteFamily,
+      remoteAddress: headers['x-real-ip'] || remoteAddress,
+    };
+  };
+  
+  // On upgrade or data, set ID
+  nodeSocket.requests = 0;
+  if (!nodeSocket.id && nodeSocket.remote) {
+    let { remoteAddress } = nodeSocket.remote;
+    let ip = remoteAddress;
+    if (!connections[ip]) {
+      connections[ip] = [];
+    }
+    let ct = connections[ip].length;
+    let id = `<${ip} - ${ct}>`;
+
     nodeSocket.id = id;
-    nodeSocket.requests = 0;
+    connections[ip] = [ ...connections[ip], nodeSocket ];
   } else {
     nodeSocket.requests += 1;
   }
 }
-
-
 
 function shouldBlock(request, response, nodeSocket) {
   let { headers, method, url, statusCode, statusMessage, httpVersion } = request || {};

@@ -1,32 +1,36 @@
 // Global event system for safe shutdowns/restarts
 import { EventEmitter } from 'node:events';
-// import { log, what, fg, bold } from '../utils/index.mjs';
-const log = () => {}; const what = () => {}; const fg = () => {}; const bold = () => {};
+import { log as _log, what, fg, bold } from '../../common/utils/index.mjs';
+// const log = () => {}; const what = () => {}; const fg = () => {}; const bold = () => {};
 
-function RootEmitter() {
+function RootEmitter(props = {}) {
+  let { id = 'RootEmitter' } = props;
+  let _id = id;
   let _emitter = new EventEmitter();
   _emitter.captureRejections = true;
-  log('init');
+
+  function log(a='', b='', c='', d='', e='', f='') {
+    _id = 'RootEmitter';
+    _log(_id, a, b, c, d, e, f);     
+  };
+
+  log('init', 'what even');
 
   let sigintString = fg([255, 50, 50], 'sigint');
   _emitter.on('shutdown', (shutdownCallback) => {
-    _log('shutdown', `${sigintString} -> [listeners()] -> ${bold('shutdownCallback()')}`);
+    log('shutdown', `${sigintString} -> [listeners()] -> ${bold('shutdownCallback()')}`);
     shutdownCallback();
   });
 
   process.once('SIGINT', function processInterrupt() {
     process.stdout.write('\n');
-    _log('node:process', 'once', sigintString);
+    log('node:process', 'once', sigintString);
     _emitter.emit('shutdown', function shutdown(shutdownCallback) {
-      _log('node:process', 'shutdown', sigintString);
+      log('node:process', 'shutdown', sigintString);
       process.kill(process.pid, 'SIGINT'); 
     });
   });
 
-  function _log(a='', b='', c='', d='', e='', f='') {
-    let _id = `RootEmitter[${null}]`;
-    log(_id, a, b, c, d, e, f);
-  };
   return _emitter;
 };
 

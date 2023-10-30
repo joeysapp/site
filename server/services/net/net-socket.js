@@ -9,7 +9,7 @@ const NETWORK_LAYERS = {
 };
 
 const DEBUG = process.env.DEBUG;
-
+const SHOW_READABLE = false;
 
 function NetSocket({
   nodeSocket = {},
@@ -30,7 +30,7 @@ function NetSocket({
     nodeSocket.end();
   },
 }) {
-  const {
+  let {
     connecting,
     buffer,
     bytesRead,
@@ -86,10 +86,10 @@ function NetSocket({
 
   });
   nodeSocket.on('readable', function() {
-    log('readable', 'init', ``);
+    (SHOW_READABLE || DEBUG) && log('readable', 'init', ``);
     let chunk;
     while ((chunk = nodeSocket.read()) !== null) {
-      log('readable', `read in <${chunk.length} b>`);
+      (SHOW_READABLE || DEBUG) && log('readable', `read in <${chunk.length} b>`);
       readChunks.push(chunk);
     }
     DEBUG && LOG_NODE_SOCKET('readable', 2);
@@ -99,53 +99,70 @@ function NetSocket({
 
     
     if (nodeSocket.readyState === 'open' && nodeSocket.timeout === 0 ) {
-      log('readable', 'All chunks streamed in and socket.readyState=open / socket.timeout=0');
+      log('readable', 'fin socket.readyState=open / socket.timeout=0');
     } else if (nodeSocket.readyState === 'open') {
-      log('readable', 'All chunks streamed in and socket.readyState=open');
+      log('readable', 'fin socket.readyState=open');
     } else {
-      log('readable', `All chunks streamed in and socket.readyState=${nodeSocket.readyState} (..we already wrote to it? and it's ending?)`);
+      log('readable', `fin socket.readyState=${nodeSocket.readyState} (..we already wrote to it? and it's ending?)`);
     }
   });
 
+  // This can be:
+  // * http GET, e.g. favicon
+  // * http POST
+  // * http GET with UPGRADE header
+  // * Proto from an already-established connection
   nodeSocket.on('data', async function(buffer) {
-    const { headers, id, contentType } = nodeSocket;
-
-    let weUpgradedThisSocketAlready = false;
+    const { headers, id, contentType, requests } = nodeSocket;
     let msg = null;
-    if (headers['sec-websocket-protocol'] === 'proto.joeys.app.utf8') {
+
+    log('data', `requests=${requests}`);
+    let isProto = nodeSocket.contentType === 'proto.joeys.app.utf8' && requests > 0;
+    nodeSocket.requests += 1;
+
+    if (isProto) {
       msg = Proto.prototype.fromFrame(buffer);
-      // This is lazy, lmao
-      if (msg.readBigInt64BE) {
-        msg = buffer.toString('utf8');        
+      let isActuallyBuffer = msg.readBigInt64BE
+      if (isActuallyBuffer) {
+        msg = buffer.toString('utf8');
+        log('data', `[ERR - NOT Proto, likely first request.]\n${what(msg, { compact: true })}`);
+      } else {
+        let { URI } = msg;
+        log('data', `[Proto -> RootEmitter.emit([${URI.join('/')}])]\n${what(msg, { compact: true })}`);
       }
-      log('data', `\n${what(msg, { compact: false })}`);
     } else {
-      // Likely just a HTTP request - but it MAY contain a payload at 
+      // } else if (nodeSocket.contentType.indexOf('application/json') !== -1) {
       let string = buffer.toString('utf8');
       let requestRows = string.split('\r\n');
       let signature = requestRows.shift().toLowerCase();
-    let payload = requestRows.pop();
+      let payload = requestRows.pop();
       try {
         payload = JSON.parse(payload);
-      } catch {}
-    requestRows.pop();
-    let headers = requestRows.reduce((acc, header, idx) => {
-      let [key, val] = header.split(': ');
-      return {
-        ...acc,
-        [key]: val,
-      };
-    }, {});
-      let auth = headers['Authorization'] || 'Anonymous';
-    msg = {
-      // headers,
-      auth,
-      signature,
-      payload,
+      } catch {
 
-    };
-      log('data', `\n${what(msg, { compact: false })}`);      
+      }
+      requestRows.pop();
+      let headers = requestRows.reduce((acc, header, idx) => {
+        let [key, val] = header.split(': ');
+        return {
+          ...acc,
+          [key]: val,
+        };
+      }, {});
+
+      let auth = headers['Authorization'] || headers['authorization'] || 'nil';
+      msg = {
+        // headers,
+        requests,
+        auth,
+        signature,
+        payload,
+        contentType: nodeSocket.contentType,
+      };
+      log('data', `\n${what(msg, { compact: true })}`);
     }
+
+    // [tbd] Passing out info for various handlers...? Might not be needed.
     if (onData) {
       onData(nodeSocket.request, nodeSocket.response, nodeSocket, msg);      
     }
@@ -182,7 +199,7 @@ function NetSocket({
     log('setDataToString()', `\n${what(data), { compact: false }}`);
   }
   nodeSocket.on('end', function() {
-    log('end');
+    log('end', `age=${(Date.now() - CREATED)/1000.0} s`);
     if (!data) {
       // setDataToString();
     }
@@ -234,6 +251,7 @@ function NetSocket({
       remotePort,
       internet: remoteAddress ? remoteFamily : family,
     };
+    _id = nodeSocket.id;
     _log(_NETWORK_LAYERS, _id, a, b, c, d);
     if (family !== remoteFamily) {
       // _log(_NETWORK_LAYERS, id, `localFamily !== remoteFamily, ${family} !== ${remoteFamily}`);
