@@ -1,10 +1,17 @@
-common
 files
+
+# Shared common repo
 .gitmodules
+common
+
+# Configs - remove out to Ansible inventories
 .env*
+
+# Put in ansible playbook
 local-frontend
-/run
+
+# Issues with EOF piping this over ssh..?
+run-hot
+*run-hot
 run
-run*
 *run
-*run*
