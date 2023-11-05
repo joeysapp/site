@@ -5,7 +5,7 @@ import path from 'node:path';
 import {
   RootEmitter,
   Files,
-  // Database,
+  Database,
   HttpsServer,
 } from './services/index.js';
 import {
@@ -70,5 +70,6 @@ function RootServer() {
 // Startup
 const rootServer = RootServer();
 const files = new Files();
+const db = new Database();
 console.log(fg([25, 180, 222], 'boot'));
 
