@@ -68,6 +68,7 @@ export default function Database() {
   // Hmm. So since we're never doing new Database anywhere, 
   // this is called when the first used query is fired, right? That doesn't seem super ideal..
   if (pool === null) {
+    log('init', 'Creating base connection pool (should only occur once.)');
     pool = new Pool(pool_config);
     info.status.set('online');
     // Make sure our pool is closed on global SIGINT
@@ -91,6 +92,7 @@ export default function Database() {
     });
   }
 
+  // This is received from the frontend.
   RootEmitter.on(['db', 'query'].join('/'), async function(proto = {}, sock) {
     let { data = '', method, URI, opCode } = proto;
 

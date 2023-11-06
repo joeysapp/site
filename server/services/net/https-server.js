@@ -11,7 +11,7 @@ import { EventEmitter } from 'node:events';
 // import { RootEmitter } from '../index.js';
 import rootEmitter from '../root-emitter.js';
 import { what, log as _log, bold, underline, fg, bg } from '../../../common/utils/index.mjs';
-import Proto, { asBuffer } from '../../../common/types/proto.mjs';
+import Proto, { asFrame } from '../../../common/types/proto.mjs';
 
 const DEBUG = process.env.DEBUG || false;
 
@@ -98,12 +98,13 @@ function HttpsServer({
       // lol, I think there just has to be some buffer period between all these requests..
       // Ideally we'd build like, a network queue I think...
       // nope, this doesn't help. just prolongs a crash
-      let RANDOM_TIME = 1000 + Math.random * 1000 + Math.random*1000;
+      // let RANDOM_TIME = 1000 + Math.random * 1000 + Math.random*1000;
 
       // ORRRRRRRRRRRRRRRRRRRRR ideally just like, update chat to users every 30s or something..........
-      setTimeout(() => {
+      // setTimeout(() => {
         try {
-          log({}, 'https.rootEmitter', `[NOT] writing to netSocket[#${idx}] w/ readyState=${netSocket.readyState} writable=${netSocket.writable}\n${what(proto)}`);
+          let { remote } = netSocket;
+          log(remote, 'https.rootEmitter', `netSocket[#${idx}] w/ readyState=${netSocket.readyState} writable=${netSocket.writable}\n${what(proto)}`);
           if (netSocket.readyState === 'writeOnly') {
             log({}, 'https.rootEmitter', '... not sure?');
             // netSocket.uncork();
@@ -111,11 +112,7 @@ function HttpsServer({
             log({}, 'https.rootEmitter', '... writing to!');
             // FIguring out how to deal with the keepAlive writing..
             netSocket.cork();
-            // netSocket.write(Buffer.from('0'));
-            // netSocket.write(asBuffer(proto));
-            // ........... is this ever getting written.......
-            // should uncork be outside this...
-            netSocket.write(asBuffer(proto), 'binary', function callback(foo) {
+            netSocket.write(asFrame(proto), 'buffer', function callback(foo) {
               // ... I think having it here means that we'll only be sending them the stuff every 10s right, or w/e the keepalive interval is?
               // netSocket.uncork();
               log({}, 'https.rootEmitter', 'Succesfully wrote out proto to netSocket');
@@ -129,7 +126,7 @@ function HttpsServer({
         } catch (err) {
           log({}, `https.rootemitter`, `failed to write to netsocket #${idx}\n${what(err)}`);
         }
-      }, RANDOM_TIME);
+      // }, RANDOM_TIME);
     });
   });
 
@@ -253,6 +250,8 @@ function HttpsServer({
         // nodeSocket.pipe(nodeSocket);
         if (nodeSocket.keepAliveInterval) return;
         let keepAliveInterval = setInterval(() => {
+          // return;
+
           // There's some issue with the rootEmitter trying to write out to the nodeSocket whil eit's writing like this
           // nodeSocket.shift('0');
           // I think writing
@@ -261,24 +260,22 @@ function HttpsServer({
             // ... This is promising? A nodesocket could be writeOnly while a buffer is still waiting to be... flushed? out to the duplex socket...?
             // nodeSocket.write(Buffer.from('0'));
             let { closed, destroyed, writable, writableAborted, writableEnded, writableCorked, writableFinished, writableHighWaterMark, writableLength, writableNeedDrain, writableObjectMode, 
-                bytesRead, bytesWritten, connecting, pending, readyState, allowHalfOpen } = nodeSocket;
+                bytesRead, bytesWritten, connecting, pending, readyState, allowHalfOpen, remote } = nodeSocket;
             let logObject = { closed, destroyed, writable, writableAborted, writableEnded, writableCorked, writableFinished, writableHighWaterMark, writableLength, writableNeedDrain, writableObjectMode, 
                             bytesRead, bytesWritten, connecting, pending, readyState, allowHalfOpen };
-            log({}, `keepAlive`, `\n${what(logObject)}`);
+            // log({}, `keepAlive`, `\n${what(logObject)}`);
+            log(remote, `keepAlive`, `bytesRead: ${what(bytesRead)} bytesWritten: ${what(bytesWritten)}`);
 
             let proto = new Proto({
-              URI: ['portal', 'foobar'],
+              URI: ['portal', 'keepalive'],
               method: ['post'],
               opCode: 0,
               data: {},
             });
-            let data = Buffer.from('ping');
-            // let data = asBuffer(proto);
-            // let data = Buffer.from('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
             nodeSocket.cork();
-            nodeSocket.write(data, 'binary', function(cb) {
-              log({}, `keepalive`, 'write callback!!!!!!!!!!!!!!!');
-              // nodeSocket.uncork();              
+            nodeSocket.write(asFrame(proto), 'binary', function(cb) {
+              log({}, `keepalive`, 'keepalive callback');
+              // nodeSocket.uncork();
             });
             nodeSocket.uncork();
           } else if (nodeSocket.readyState === 'writeOnly') {
