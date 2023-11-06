@@ -2,6 +2,9 @@ import { what, log as _log, fg } from '../../../common/utils/index.mjs';
 import { Proto, Info, Sock as SiteUser } from '../../../common/types/index.mjs';
 import { asBuffer, asFrame } from '../../../common/types/proto.mjs';
 
+import { EventEmitter } from 'node:events';
+import { RootEmitter } from '../index.js';
+import rootEmitter from '../root-emitter.js';
 
 const NETWORK_LAYERS = {
   application: '--', transport: 'TCP', internet: '--', link: 'MAC',
@@ -9,7 +12,7 @@ const NETWORK_LAYERS = {
 };
 
 const DEBUG = process.env.DEBUG;
-const SHOW_READABLE = false;
+const SHOW_READABLE = true;
 
 function NetSocket({
   nodeSocket = {},
@@ -41,6 +44,7 @@ function NetSocket({
     localAddress,
     localFamily,
     localPort,
+    headers = {},
   } = nodeSocket;
   
   function LOG_NODE_SOCKET(method, idx) {
@@ -75,6 +79,21 @@ function NetSocket({
   let _id = nodeSocket.id;
   log('init');
   // LOG_NODE_SOCKET('init', 0);
+
+  // I... think? we can't add listeners here, right after connection?
+  // nodeSocket.on('shutdown', function(nil) {
+  //   log('shutdown', 'set in constructor?');
+  // });
+  // nodeSocket.on('osrs/salmon/log', function(proto) {
+  //   log('osrs/salmon/log', `set in constructor? ${what(proto)}`);
+  // });
+  // let { upgrade = '' } = headers;
+  // if (upgrade === 'websocket') {
+  //   rootEmitter.on(['osrs', 'salmon', 'log'].join('/'), function(data) {
+  //     log('rootEmitter', `[osrs/salmon/log] Heard this, so write it back to socket: ${data}`);
+  //   });
+  // }
+  // 
 
   nodeSocket.on('resume', function(nil) {
     log('resume'); DEBUG && LOG_NODE_SOCKET('resume', 0);
@@ -128,7 +147,12 @@ function NetSocket({
         log('data', `[ERR - NOT Proto, likely first request.]\n${what(msg, { compact: true })}`);
       } else {
         let { URI } = msg;
-        log('data', `[Proto -> RootEmitter.emit([${URI.join('/')}])]\n${what(msg, { compact: true })}`);
+        // nodeSocket.addListener(URI.join('/'), function(proto) {
+        //   log(URI.join('/'), `[todo] Uh, do something I guess? Do we just write the proto?\n${what(proto)}`);
+        // });
+        log('data', `[todo] Parse out proto - should this netsocket emit the event...? And the rootEmitter is listening for it?`);
+        nodeSocket.emit(URI.join('/'), msg, nodeSocket);
+        // log('data', `[Proto -> netSocket.addListener(URI), RootEmitter.emit([${URI.join('/')}])]\n${what(msg, { compact: true })}\nListeners=[${what(nodeSocket.eventNames())}]`);
       }
     } else {
       // } else if (nodeSocket.contentType.indexOf('application/json') !== -1) {
@@ -220,7 +244,7 @@ function NetSocket({
   nodeSocket.on('connect', function() { log('connect'); });
   nodeSocket.on('ready', function() { log('ready'); });
   nodeSocket.on('drain', function() { log('drain'); });
-  nodeSocket.on('error', function(error) { log('error'); });
+  nodeSocket.on('error', function(error) { log('error', `\n${what(error)}\n`); });
   nodeSocket.on('lookup', function(error, address, family, host) { log('lookup', `address=${address} family=${family} host=${host}`); });
   nodeSocket.on('pause', function(data) { log('pause'); });
   nodeSocket.on('pipe', function(error) { log('pipe'); }); 

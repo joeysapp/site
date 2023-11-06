@@ -12,6 +12,7 @@ import {
   log, fg, what, numToBytes,
   show_sockets, show_network_layers, show_http, show_init, show_files, show_time,
 } from '../common/utils/index.mjs';
+import { Proto } from '../common/types/index.mjs';
 
 import { oldschoolRequest, oldschoolSocket } from './services/oldschool/index.js';
 
@@ -39,6 +40,7 @@ function RootServer() {
       if (isSalmonLogPost) {
         oldschoolRequest(request, response, netSocket, data)
           .then((internal_message) => {
+            
             // Assume all the writing/ending has been done
             if (request.somehow_not_ended) {
               request.end();
@@ -71,5 +73,19 @@ function RootServer() {
 const rootServer = RootServer();
 const files = new Files();
 const db = new Database();
+
+setTimeout(() => {
+  
+  // let proto = new Proto({ opCode: 0, method: ['post'], URI: ['db', 'query'], data: { wat: 'foobar' } });
+  // let socket = {
+  //   writeProto: function(opCode, URI, method, data) {
+  //     console.log('writeProto woooo');
+  //   }
+  // };
+  //  RootEmitter.emit(['db', 'query'].join('/'), proto, socket);
+
+  
+}, 1000);
+
 console.log(fg([25, 180, 222], 'boot'));
 

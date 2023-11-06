@@ -14,18 +14,38 @@ function RootEmitter(props = {}) {
     _log(_id, a, b, c, d, e, f);     
   };
 
-  log('init', 'what even');
+  console.log('RootEmitter.init');
 
   let sigintString = fg([255, 50, 50], 'sigint');
-  _emitter.on('shutdown', (shutdownCallback) => {
+  _emitter.on('shutdown', function shutdownCallbackListener(shutdownCallback) {
     log('shutdown', `${sigintString} -> [listeners()] -> ${bold('shutdownCallback()')}`);
     shutdownCallback();
   });
+  _emitter.on('uncaughtException', function(err) {
+    log('uncaughtException', `${what(err)}`);
+  });
+  // _emitter.on('osrs/salmon/log', function(proto, netSocket) {
+  //   log('osrs/salmon/log', `${what(proto)} ... [netsocket] ... Should this be registered in http-server/`);
+  // });
 
   process.once('SIGINT', function processInterrupt() {
     process.stdout.write('\n');
-    log('node:process', 'once', sigintString);
-    _emitter.emit('shutdown', function shutdown(shutdownCallback) {
+    log('node:process', `once(${sigintString})`);
+
+    let eventName = 'shutdown';
+    let eventNames = _emitter.eventNames();
+    let l = eventNames.reduce((acc, e, idx) => {
+      let s = `RootEmitter.emit(${e})\n`;
+      let listeners = _emitter.listeners(e);
+      let listenerString = listeners.reduce((allListeners, listenerMethod, idx2) => {
+        return `${allListeners}- ${what(listenerMethod)}\n`;
+      }, '');
+      s += listenerString;
+      return `${acc}${s}\n`
+    }, '');
+    log('node:process', `${l}`);
+
+    _emitter.emit('shutdown', function handleRootShutdown(shutdownCallback) {
       log('node:process', 'shutdown', sigintString);
       process.kill(process.pid, 'SIGINT'); 
     });
@@ -35,4 +55,7 @@ function RootEmitter(props = {}) {
 };
 
 const rootEmitter = new RootEmitter();
+rootEmitter.on(['osrs', 'salmon', 'log'].join('/'), function(data) {
+  console.log(`root-emitter heard osrs/salmon/log: ${data}`);
+});
 export default rootEmitter;

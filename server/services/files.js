@@ -292,7 +292,7 @@ function Files() {
     _log(_id, a, b, c, d, e, f); 
   };
   log('init');
-  RootEmitter.on('shutdown', function handleShutdown(callback) {
+  RootEmitter.on('shutdown', function handleFileShutdown(callback) {
     log('shutdown', 'Finishing writing out to files');
 
     callback();

@@ -23,9 +23,10 @@ import { what, log as _log, fg, bold } from '../../../common/utils/index.mjs';
 // import * as queries from './queries-javascript-functions.js';
 
 let pool_config = {
-  user: process.env.pg_user, 
-  database: process.env.pg_database,
-  port: process.env.pg_port, 
+  user: 'node_pool' || process.env.pg_user, 
+  password: 'node_pool',
+  database: 'node_frontend_db' || process.env.pg_database,
+  port: 5432 || process.env.pg_port, 
 
   // [ref] https://github.com/brianc/node-pg-types/blob/master/lib/textParsers.js#L138
   // [ref] https://www.postgresql.org/docs/9.5/datatype.html
@@ -99,7 +100,7 @@ export default function Database() {
     if (data.indexOf('drop') !== -1 || data.indexOf('delete') !== -1) {
       sock.writeProto(0, ['db', 'query'], ['put'], ['that was not a very nice query']);
     } else {
-      let result = await query({ text: queryString, options });
+      let result = await query({ text: queryString, values, options });
       // Result is a rows=[] or a { rows=[], fields={} }...
       sock.writeProto(0, ['db', 'query'], ['put'], result);
     }
@@ -114,7 +115,7 @@ export default function Database() {
   // emit the connect event with the newly connected client.
   // This presents an opportunity for you to run setup commands on a client.
   pool.on('connect', function(c) {
-    // log(id, 'connect');
+    log(id, 'connect');
     // [todo] e.g. client.query('SET DATESTYLE = iso, mdy');
   });
 
@@ -181,6 +182,7 @@ export default function Database() {
       return typedRows;
     } catch (err) {
       log('query()', 'error', `\n${what(err)}`);
+      let rows = [];
       return rowMode === 'array' ? { rows: [[err.message]], fields: [{ dataRowID: 1043, name: 'Error' }] } : rows;
 
       // [todo] We could do a rollback if necessary: client.query('rollback');
