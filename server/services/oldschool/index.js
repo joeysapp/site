@@ -12,9 +12,9 @@ import {
 
 let DEBUG = false;
 function setFields(fields) {
-  fields[0].name = 'Auth';
-  fields[1].name = 'Date';
-  fields[2].name = 'Entry';
+  // fields[0].name = 'Auth';
+  // fields[1].name = 'Date';
+  // fields[2].name = 'Entry';
   return fields;
 }
 
@@ -80,13 +80,9 @@ order by osrs_chat_timestamp
 ;`,
   }).then(function({ rows, fields }) {
     log('oldschool', 'rows', `\n${what(fields)}\n${what(rows)}\n`);
+
     // temporarily just adding in labels lol
     fields = setFields(fields);
-    // fields[0].label = 'Auth';
-    // fields[1].label = 'Timestamp';
-    // fields[2].label = 'Rank';
-    // fields[3].label = 'RSN';
-    // fields[4].label = 'Value';
     // Write out new SQL rows to connected frontend sockets
     let eventName = ['osrs', 'salmon', 'log'].join('/');
     let proto = new Proto({ 
@@ -135,14 +131,20 @@ async function oldschoolRequest(request, response, netSocket, data) {
     let valueArray = [];
     payload.forEach((msgObject, i) => {
       // Exclude all log entries that are not from sender "Sals Realm"
-      if (shouldExcludeLog(msgObject)) return acc;      
-      let { auth, timestamp, id, chatType, chatName, rank, sender, message } = msgObject;
-      valueArray.push(auth, timestamp, id, chatType, chatName, rank, sender, message);
-      let j = (i) * 8;
-      preparedValueString = `${preparedValueString}($${j+1}, $${j+2}, $${j+3}, $${j+4}, $${j+5}, $${j+6}, $${j+7}, $${j+8})${i < payload.length-1 ? ',' : ''}`;
+      if (shouldExcludeLog(msgObject)) {
+
+      } else {
+        let { auth, timestamp, id, chatType, chatName, rank, sender, message } = msgObject;
+        valueArray.push(auth, timestamp, id, chatType, chatName, rank, sender, message);
+        let j = (i) * 8;
+        preparedValueString = `${preparedValueString}($${j+1}, $${j+2}, $${j+3}, $${j+4}, $${j+5}, $${j+6}, $${j+7}, $${j+8}),`;
+      }
     });
+    // Prevent conditional adding of , with excluding logs
+    preparedValueString = preparedValueString.substring(0, preparedValueString.length-1);
 
     log('oldschool', `pvstring`,`\n${what(preparedValueString)}\n${what(valueArray)}\n`);
+    if (preparedValueString) {
     db.query({
       text: `
 insert into salmon_log
@@ -157,13 +159,8 @@ osrs_chat_auth, osrs_chat_timestamp, osrs_chat_entry
     }).then(function({ rows, fields }) {
       log('oldschool', 'rows', `\n${what(fields)}\n${what(rows)}\n`);
       // temporarily just adding in labels lol
-      // fields[0].label = 'Auth';
-      // fields[1].label = 'Timestamp';
-      // fields[2].label = 'Rank';
-      // fields[3].label = 'RSN';
-      // fields[4].label = 'Value';
-      // Write out new SQL rows to connected frontend sockets
       fields = setFields(fields);
+      // Write out new SQL rows to connected frontend sockets
       let eventName = ['osrs', 'salmon', 'log'].join('/');
       log(id, 'XX', `rootEmitter.emit(${eventName}) -> https-server sends to all websockets`);
       let proto = new Proto({ 
@@ -175,6 +172,7 @@ osrs_chat_auth, osrs_chat_timestamp, osrs_chat_entry
 
       rootEmitter.emit(eventName, proto);
     });
+    }
     return;
 
     // The rest of this is the old CSV methods
