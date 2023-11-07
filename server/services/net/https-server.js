@@ -87,7 +87,8 @@ function HttpsServer({
 
   rootEmitter.on(['osrs', 'salmon', 'log'].join('/'), function(proto) {
     // log({}, 'https.rootEmitter', `osrssalmonlog, going through all websockets :D\n${proto}`);
-    websockets[['osrs', 'salmon', 'log']].forEach((netSocket, idx) => {
+    let endpoint = ['osrs', 'salmon', 'log'].join('/');
+    (websockets[endpoint] || []).forEach((netSocket, idx) => {
       // return;
       // .. This does nothing, but I wonder, is there an issue with the keepalive interval?
       // netSocket.pipe().write(proto.protoToBuffer());
@@ -142,12 +143,28 @@ function HttpsServer({
       onData: function(request, response, netSocket, data) {
         onSocketData(request, response, netSocket, data);
         let { headers, id, contentType, requests } = nodeSocket;
-        if (nodeSocket.keepAliveInterval && contentType.indexOf('proto.joeys.app') !== -1) {
+
+        // Handled a websocket's initial request/upgrade, we are now receiving proto data:
+        if (netSocket.keepAliveInterval && contentType.indexOf('proto.joeys.app') !== -1) {
           let { URI, method, opCode } = data;
+          let endpoint = URI.join('/');
+
           // [todo] Figure out like, listening method
-          _log('https', 'onSocketData', `Registering rootEmitter.on(${URI.join('/')})`);
-          if (!websockets[URI]) websockets[URI] = [];
-          websockets[URI].push(netSocket);
+
+          // How do we handle initial connections - do this to keep it generic..?
+          // How would we update all our other connections though?.. hmm, I did this with Sock Users and stuff. I think? Or no..
+          // rootEmitter.emit(URI.join('/'), data, netSocket);
+
+          // This will be for handling URIs that we want the http-server to be able to talk to, e.g. a live chatroom
+          if (!websockets[URI.join('/')]) {
+            // Weird run condition on refreshing sockets, just be explicit w/ if/else.
+            websockets[URI.join('/')] = [];
+          }
+          websockets[URI.join('/')].push(netSocket);
+          _log('https', 'onSocketData', `Registering rootEmitter.on(${URI.join('/')}) -> [${websockets[URI.join('/')].length}]`);
+          // if (endpoint === 'osrs/salmon/log') {            
+          //   oldschoolInit(request, response, netSocket, data);
+          // }
         }
       },
       onResume: onSocketResume,
@@ -230,7 +247,8 @@ function HttpsServer({
     // [todo] Seeing if we need to do request.setSocketKeepAlive() too?
     // nodeSocket.setKeepAlive(true);
     let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests, contentType } = nodeSocket;
-        let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests, contentType };
+    let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests, contentType };
+
     log(remote, 'upgrade', `\n${what(printObj, { compact: true })}`);
 
     if (shouldBlock(request, null, nodeSocket)) {
@@ -249,13 +267,13 @@ function HttpsServer({
         // Tried piping socket to itself, still can't have the keepalive interval and a rootemitter writing out protos..
         // nodeSocket.pipe(nodeSocket);
         if (nodeSocket.keepAliveInterval) return;
-        let keepAliveInterval = setInterval(() => {
+        let keepAliveInterval = setInterval(function() {
           // return;
 
           // There's some issue with the rootEmitter trying to write out to the nodeSocket whil eit's writing like this
           // nodeSocket.shift('0');
           // I think writing
-          log({}, `keepAlive`, `${nodeSocket.readyState} ${nodeSocket.writable}`);
+          // log({}, `keepAlive`, `${nodeSocket.readyState} ${nodeSocket.writable}`);
           if (nodeSocket.readyState === 'open') {
             // ... This is promising? A nodesocket could be writeOnly while a buffer is still waiting to be... flushed? out to the duplex socket...?
             // nodeSocket.write(Buffer.from('0'));
@@ -264,7 +282,7 @@ function HttpsServer({
             let logObject = { closed, destroyed, writable, writableAborted, writableEnded, writableCorked, writableFinished, writableHighWaterMark, writableLength, writableNeedDrain, writableObjectMode, 
                             bytesRead, bytesWritten, connecting, pending, readyState, allowHalfOpen };
             // log({}, `keepAlive`, `\n${what(logObject)}`);
-            log(remote, `keepAlive`, `bytesRead: ${what(bytesRead)} bytesWritten: ${what(bytesWritten)}`);
+            log(remote, `keepAlive`, `${nodeSocket.readyState} ${nodeSocket.writable} [-> ${what(bytesRead)} ${what(bytesWritten)} ->]`);
 
             let proto = new Proto({
               URI: ['portal', 'keepalive'],
@@ -274,18 +292,18 @@ function HttpsServer({
             });
             nodeSocket.cork();
             nodeSocket.write(asFrame(proto), 'binary', function(cb) {
-              log({}, `keepalive`, 'keepalive callback');
+              // log({}, `keepalive`, 'keepalive callback');
               // nodeSocket.uncork();
             });
             nodeSocket.uncork();
           } else if (nodeSocket.readyState === 'writeOnly') {
             // seems to be causing crashes too... only do cork/uncork in the emitter maybe?
-            log({}, `keepAlive`, `Attempting to ... uncork? ... no, not doing anything...?`);
+            // log({}, `keepAlive`, `Attempting to ... uncork? ... no, not doing anything...?`);
            // nodeSocket.uncork();
           }
           // huh.. uh. this kind of worked? 
           // nodeSocket.pipe(nodeSocket);
-        },10000);
+        }, 20000);
         nodeSocket.keepAliveInterval = keepAliveInterval;
         // // nodeSocket.keepAliveInterval = true;
 

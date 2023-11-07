@@ -14,7 +14,7 @@ import {
 } from '../common/utils/index.mjs';
 import { Proto } from '../common/types/index.mjs';
 
-import { oldschoolRequest, oldschoolSocket } from './services/oldschool/index.js';
+import { oldschoolRequest, oldschoolSocket, oldschoolInit } from './services/oldschool/index.js';
 
 // show_network_layers();
 show_sockets();
@@ -59,11 +59,19 @@ function RootServer() {
       );
 
       let isWebsocketData = (
-        false
+        netSocket.keepAliveInterval
       );
       // .. *I BELIEVE* the rest of the hosts should be internally proxieid...?
       // So I think a given netSocket needs to set their initial host otherwise idk how we know where the data/proto needs to go
       log(id, 'data', 'Is socket established? ');
+      if (isWebsocketData) {
+        let { URI, method } = data;
+        let endpoint = URI.join('/');
+        if (endpoint === 'osrs/salmon/log') {            
+          oldschoolInit(request, response, netSocket, data);
+        }
+      }
+
       // oldschoolSocket(request, response, netSocket, data);      
     },
   });
@@ -74,18 +82,22 @@ const rootServer = RootServer();
 const files = new Files();
 const db = new Database();
 
-setTimeout(() => {
+setTimeout(async () => {
+  // let rows = await db.query({
+  //   text: 'select * from salmon_log;',
+  //   values: [],
+  //   doLog: true,
+  // });
+  // log('db/salmon_log', `\n\n${what(rows)}\n\n`);
   
-  // let proto = new Proto({ opCode: 0, method: ['post'], URI: ['db', 'query'], data: { wat: 'foobar' } });
+  //// let proto = new Proto({ opCode: 0, method: ['post'], URI: ['db', 'query'], data: { wat: 'foobar' } });
   // let socket = {
   //   writeProto: function(opCode, URI, method, data) {
   //     console.log('writeProto woooo');
   //   }
   // };
-  //  RootEmitter.emit(['db', 'query'].join('/'), proto, socket);
-
-  
-}, 1000);
+  //  RootEmitter.emit(['db', 'query'].join('/'), proto, socket);  
+}, 100);
 
 console.log(fg([25, 180, 222], 'boot'));
 

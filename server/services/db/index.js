@@ -55,8 +55,11 @@ let pool = null;
 // globalDatabase.info.add(info);
 // export default globalDatabase;
 
-export default function Database() {
-  let id = 'Database';
+export default function Database(settings = {}) {
+  let { 
+    id: _id,
+  } = settings;
+  let id = 'Database' || _id;
   let info = new Info({ id, queries: 0 });  
 
   function log(a='', b='', c='', d='', e='', f='') {
@@ -152,45 +155,47 @@ export default function Database() {
   
   // export const query = async ({ text, values=[], type='Number', opts={} }) => {
   let firstQuery = null;
-  async function query({ text, values=[], type='number', options = {}, doLog=true}) {
-    let { rowMode = 'object' } = options;
-    let client, result;
-    
-    // lol, this is kind of messy.. but if we're never doing a new Database anywhere..
-    // hmm.
-    if (!firstQuery) {
-      log('init');
-      firstQuery = true;
-    };
+  async function query({ text, values=[], type='number', doLog=true, rowMode='array' }) {
+    return new Promise(async function(resolve, reject) {
+      let client, result;      
+      // lol, this is kind of messy.. but if we're never doing a new Database anywhere..
+      // hmm.
+      if (!firstQuery) {
+        log('init');
+        firstQuery = true;
+      };
 
-    info.queries += 1;
-    try {
-      if (doLog) {
-        let s = text;
-        s = s.substring(0, 30); s += '..'; s = `${s.padEnd(32, ' ')}`;
-        s = fg([100, 100, 100], s); s += ` -> <${bold(type)}>`;
-        log('query()', s);
+      info.queries += 1;
+      try {
+        if (doLog) {
+          let s = text;
+          // s = s.substring(0, 30);
+          s += '..'; s = `${s.padEnd(32, ' ')}`;
+          s = fg([100, 100, 100], s); s += ` -> <${bold(type)}>`;
+          log('query()', s);
+        }
+
+        client = await pool.connect();
+        result = await client.query({ text, values, rowMode });
+        let { rows = [], fields } = result;
+        // So this actually wasn't doing anything - still need to figure out how exactly we're doing typing
+        // let typedRows = rows.map(r => getType({ type, data: r }));
+        // console.log('fields', fields);
+        // console.log('rows[0]', rows[0]);
+        resolve(rowMode === 'array' ? { rows, fields } : rows);
+        // return rowMode === 'array' ? { rows, fields } : rows;
+
+        // return typedRows;
+      } catch (err) {
+        log('query()', 'error', `\n${what(err)}`);
+        let rows = [];
+        reject(rowMode === 'array' ? { rows: [[err.message]], fields: [{ dataRowID: 1043, name: 'Error' }] } : rows);
+        // return rowMode === 'array' ? { rows: [[err.message]], fields: [{ dataRowID: 1043, name: 'Error' }] } : rows;        
+        // [todo] We could do a rollback if necessary: client.query('rollback');
+      } finally {
+        if (client) client.release();
       }
-
-      client = await pool.connect();
-      result = await client.query({ text, values, rowMode });
-      let { rows = [], fields } = result;
-      // So this actually wasn't doing anything - still need to figure out how exactly we're doing typing
-      // let typedRows = rows.map(r => getType({ type, data: r }));
-      // console.log('fields', fields);
-      // console.log('rows[0]', rows[0]);
-      return rowMode === 'array' ? { rows, fields } : rows;
-
-      return typedRows;
-    } catch (err) {
-      log('query()', 'error', `\n${what(err)}`);
-      let rows = [];
-      return rowMode === 'array' ? { rows: [[err.message]], fields: [{ dataRowID: 1043, name: 'Error' }] } : rows;
-
-      // [todo] We could do a rollback if necessary: client.query('rollback');
-    } finally {
-      if (client) client.release();
-    }
+    });
   }
 
   async function hasTable(tableName) {
