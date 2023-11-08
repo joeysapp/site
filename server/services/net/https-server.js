@@ -14,24 +14,29 @@ import { what, log as _log, bold, underline, fg, bg } from '../../../common/util
 import Proto, { asFrame } from '../../../common/types/proto.mjs';
 
 const DEBUG = process.env.DEBUG || false;
-
 const NETWORK_LAYERS = {
   application: '--', transport: 'tcp', internet: 'IPv4', link: 'MAC',
   remoteAddress: '', remotePort: '', localAddress: '', localPort: '',
 };
 
-// IP addresses to lists of connected (possibly tls) sockets
+const KEEPALIVE_INTERVAL = 55000;
+
+// List of all connections seen per IP. (e.g. GETs/POSTS)
 let connections = {
   // '127.0.0.1': [],
 };
+
+// Live TLS connections..
+// .. Currently, this is a websockets[URI] = [...socket1, socket2]...
+// .. This should probably be like, endpoints.
 let websockets = {};
 
-function logConnections() {
+function logEverySeenConnection() {
   let cString = Object.keys(connections).reduce((cAcc, ip, cIdx) => {
     let sockets = connections[ip];
     let socketString = sockets.reduce((acc, socket, idx) => {
       return `${acc}\t${idx}\t${socket.id}${idx < sockets.length-1 ? '\n' : ''}`;
-    }, `${ip}\ns`)
+    }, `${ip}\n`)
     if (socketString) {
       socketString = `\n${socketString}`;
     }
@@ -41,8 +46,8 @@ function logConnections() {
 
 }
 // setInterval(() => {
-//   logConnections();
-// }, 5000);
+//   logEverySeenConnection();
+// }, KEEPALIVE_INTERVAL);
 
 function HttpsServer({
   id,
@@ -162,6 +167,7 @@ function HttpsServer({
           }
           websockets[URI.join('/')].push(netSocket);
           _log('https', 'onSocketData', `Registering rootEmitter.on(${URI.join('/')}) -> [${websockets[URI.join('/')].length}]`);
+          // ... This is being handled in the above RootServer ATM.
           // if (endpoint === 'osrs/salmon/log') {            
           //   oldschoolInit(request, response, netSocket, data);
           // }
@@ -170,9 +176,13 @@ function HttpsServer({
       onResume: onSocketResume,
       onReadable: onSocketReadable,
       onRead: onSocketRead,
-      onEnd: onSocketEnd,
       onFinish: onSocketFinish,
       onClose: onSocketClose,
+      // This is from a websocket closing on the frontend
+      onEnd: function(nothing) {
+        onSocketEnd(nothing);
+        // ... Remove from our websockets?
+      },
     });
     onConnection && onConnection(netSocket);
   });
@@ -303,7 +313,7 @@ function HttpsServer({
           }
           // huh.. uh. this kind of worked? 
           // nodeSocket.pipe(nodeSocket);
-        }, 20000);
+        }, KEEPALIVE_INTERVAL);
         nodeSocket.keepAliveInterval = keepAliveInterval;
         // // nodeSocket.keepAliveInterval = true;
 

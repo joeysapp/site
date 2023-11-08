@@ -2,19 +2,23 @@ import { env } from 'node:process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+// Base functions
 import {
   RootEmitter,
   Files,
   Database,
   HttpsServer,
 } from './services/index.js';
+
+// Endpoints
+import { oldschoolRequest, oldschoolInit } from './services/oldschool/index.js';
+
+// Utilities
 import {
   log, fg, what, numToBytes,
   show_sockets, show_network_layers, show_http, show_init, show_files, show_time,
 } from '../common/utils/index.mjs';
 import { Proto } from '../common/types/index.mjs';
-
-import { oldschoolRequest, oldschoolSocket, oldschoolInit } from './services/oldschool/index.js';
 
 // show_network_layers();
 show_sockets();
@@ -39,8 +43,7 @@ function RootServer() {
       let isSalmonLogPost = (host === 'osrs.joeys.app' && method === 'POST' && url === '/salmon-log');
       if (isSalmonLogPost) {
         oldschoolRequest(request, response, netSocket, data)
-          .then((internal_message) => {
-            
+          .then((internal_message) => {            
             // Assume all the writing/ending has been done
             if (request.somehow_not_ended) {
               request.end();
@@ -54,16 +57,16 @@ function RootServer() {
 
       let isAxidrawControlPost = (method === 'POST' && url === '/axidraw/control');
 
+      // Being handled internally
       let isWebsocketHandshake = (
         false
       );
-
       let isWebsocketData = (
         netSocket.keepAliveInterval
       );
+
       // .. *I BELIEVE* the rest of the hosts should be internally proxieid...?
       // So I think a given netSocket needs to set their initial host otherwise idk how we know where the data/proto needs to go
-      log(id, 'data', 'Is socket established? ');
       if (isWebsocketData) {
         let { URI, method } = data;
         let endpoint = URI.join('/');
@@ -72,7 +75,6 @@ function RootServer() {
         }
       }
 
-      // oldschoolSocket(request, response, netSocket, data);      
     },
   });
 }
