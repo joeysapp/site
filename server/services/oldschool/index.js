@@ -42,12 +42,12 @@ function shouldExcludeLog({ auth, chatName, chatType, id, message, rank, sender,
 let db = new Database('db/oldschool');
 async function oldschoolInit(request, response, netSocket, data) {
   // let { remote } = netSocket;
-  log('osrs', 'init', 'sending out entire table');
-  let queryString = `select osrs_chat_auth, osrs_chat_timestamp, osrs_chat_entry from salmon_log order by osrs_chat_timestamp;`;
+  // log('osrs', 'init', 'sending out entire table');
+  let queryString = `select osrs_chat_auth, osrs_chat_timestamp, osrs_chat_entry from salmon_log order by osrs_chat_timestamp desc;`;
   db.query({
     text: queryString,
   }).then(function({ rows, fields }) {
-    log('osrs', 'init', `[ ${rows.length} rows ] ->`);
+    log('osrs', 'init', `-> [ ${rows.length} rows ]`);
 
     // Write out new SQL rows to connected frontend sockets
     let eventName = ['osrs', 'salmon', 'log'].join('/');
@@ -57,7 +57,9 @@ async function oldschoolInit(request, response, netSocket, data) {
       URI: ['osrs', 'salmon', 'log'],
       data: { rows, fields },
     });
-    netSocket.write(asFrame(proto));
+    setTimeout(() => {
+      netSocket.write(asFrame(proto));
+    }, 500);
   });
 }
 
@@ -65,25 +67,28 @@ async function oldschoolInit(request, response, netSocket, data) {
 async function oldschoolRequest(request, response, netSocket, data) {
   try {
   let id = 'osrs, request';
-  log(id, '000', ``);
-  return new Promise((resolve, reject) => {
-    DEBUG && log(id, '001');
+  return new Promise(async (resolve, reject) => {
     let { url, method, headers } = request;
     if (method !== 'POST') {
       response.writeHeader(200); response.end();
       reject(); return;
     }
     let { signature, auth, payload = '' } = data;
-    DEBUG && log(id, '002', ``);
     if (typeof payload === 'object' && payload.length > 0) {
       payload = payload.map(msgObject => {
         return { auth, ...msgObject };
       });
-      DEBUG && log(id, '003', ``);
     } else {
-      log(id, '003-ERR', `${auth} ${signature}\n ${what(payload)}`);
       response.writeHeader(400, { 'Content-Type': 'text/plain' }); response.end();
       reject(); return;
+    }
+    // Delay our own write-ins to allow other people to write in faster
+    if (auth === 'Zyo') {
+      await new Promise(resolve => {
+        setTimeout(() => {
+          resolve();
+        }, 5000);
+      });
     }
     // Write out all messages as rows to SQL
     // Use prepared statements to prevent any injections

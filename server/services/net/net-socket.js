@@ -12,7 +12,7 @@ const NETWORK_LAYERS = {
 };
 
 const DEBUG = process.env.DEBUG;
-const SHOW_READABLE = true;
+const SHOW_READABLE = false;
 
 function NetSocket({
   nodeSocket = {},
@@ -75,9 +75,15 @@ function NetSocket({
   // :-|
   let data = null;
 
+  function doLog() {
+    let { url } = headers || {};
+    if (url !== '/salmon-log') return true;
+    return false;
+  }
+
   const CREATED = Date.now();
   let _id = nodeSocket.id;
-  log('init');
+  doLog() && log('init');
   // LOG_NODE_SOCKET('init', 0);
 
   // I... think? we can't add listeners here, right after connection?
@@ -118,11 +124,11 @@ function NetSocket({
 
     
     if (nodeSocket.readyState === 'open' && nodeSocket.timeout === 0 ) {
-      log('readable', 'fin socket.readyState=open / socket.timeout=0');
+      (SHOW_READABLE || DEBUG) && log('readable', 'fin socket.readyState=open / socket.timeout=0');
     } else if (nodeSocket.readyState === 'open') {
-      log('readable', 'fin socket.readyState=open');
+      (SHOW_READABLE || DEBUG) && log('readable', 'fin socket.readyState=open');
     } else {
-      log('readable', `fin socket.readyState=${nodeSocket.readyState} (..we already wrote to it? and it's ending?)`);
+      (SHOW_READABLE || DEBUG) && log('readable', `fin socket.readyState=${nodeSocket.readyState} (..we already wrote to it? and it's ending?)`);
     }
   });
 
@@ -136,7 +142,7 @@ function NetSocket({
     let msg = null;
 
     log('data', `requests=${requests}`);
-    let isProto = nodeSocket.contentType === 'proto.joeys.app.utf8' && requests > 0;
+    let isProto = nodeSocket.contentType.indexOf('proto.joeys.app') !== -1 && requests > 0;
     nodeSocket.requests += 1;
 
     if (isProto) {
@@ -183,7 +189,7 @@ function NetSocket({
         payload,
         contentType: nodeSocket.contentType,
       };
-      log('data', `\n${what(msg, { compact: true })}`);
+      DEBUG && log('data', `\n${what(msg, { compact: true })}`);
     }
 
     // [tbd] Passing out info for various handlers...? Might not be needed.

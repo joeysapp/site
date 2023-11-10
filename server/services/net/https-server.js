@@ -31,6 +31,15 @@ let connections = {
 // .. This should probably be like, endpoints.
 let websockets = {};
 
+function doLog(request, response) {
+  let { url } = request;
+  console.log(url);
+  if (url !== '/salmon-log') {
+    return true;
+  }
+  return false;
+}
+
 function logEverySeenConnection() {
   let cString = Object.keys(connections).reduce((cAcc, ip, cIdx) => {
     let sockets = connections[ip];
@@ -110,9 +119,9 @@ function HttpsServer({
       // setTimeout(() => {
         try {
           let { remote } = netSocket;
-          log(remote, 'https.rootEmitter', `netSocket[#${idx}] w/ readyState=${netSocket.readyState} writable=${netSocket.writable}\n${what(proto)}`);
+          log(remote, 'https.rootEmitter', `netSocket[#${idx}] w/ readyState=${netSocket.readyState} writable=${netSocket.writable}`);
           if (netSocket.readyState === 'writeOnly') {
-            log({}, 'https.rootEmitter', '... not sure?');
+            // log({}, 'https.rootEmitter', '... not sure?');
             // netSocket.uncork();
           } else if (netSocket.readyState === 'open') {
             log({}, 'https.rootEmitter', '... writing to!');
@@ -139,7 +148,8 @@ function HttpsServer({
   _httpsServer.addListener('connection', function(nodeSocket) {
     bindSocket(null, null, nodeSocket);
     // nodeSocket.setKeepAlive(true);
-    let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;
+    // So we don't have any of these afaik: 
+    let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;   
     log(remote, 'connection');
 
     // Wrapper for the actual nodesocket, adding in basic handlers
@@ -195,7 +205,9 @@ function HttpsServer({
 
     let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;
     let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests, data, reusedSocket };
-    log(remote, 'request', `\n${what(printObj, { compact: true })}`);
+    if (url !== '/salmon-log') {
+      log(remote, 'request', `\n${what(printObj, { compact: true })}`);
+    }
 
     // Just hang them, this works
     if (shouldBlock(request, response, nodeSocket)) {
@@ -207,41 +219,41 @@ function HttpsServer({
     }
 
     request.addListener('socket', function(nodeSocket) {
-      log(remote, 'req(req.socket)', `${id} nodeSocket` );
+     DEBUG && log(remote, 'req(req.socket)', `${id} nodeSocket` );
     });
     request.addListener('aborted', function() {
-      log(remote, 'req(req.aborted)', `${id} req aborted` );
+      DEBUG && log(remote, 'req(req.aborted)', `${id} req aborted` );
     });
     request.addListener('close', function() {
-      log(remote, 'req(req.close)', `${id} req closing` );
+      DEBUG && log(remote, 'req(req.close)', `${id} req closing` );
     });   
     request.addListener('end', function() {
-      log(remote, 'req(req.end)', `${id}` );
+      DEBUG && log(remote, 'req(req.end)', `${id}` );
     });   
 
     response.addListener('finish', function () {
-      log(remote, 'req(res.finish)', `after ${id}.end()`);
+      DEBUG && log(remote, 'req(res.finish)', `after ${id}.end()`);
       onResponseFinish && onResponseFinish(request, response, netSocket);
     });
     response.addListener('prefinish', function () {
-      log(remote, 'req(res.prefinish)', `${id}`);
+      DEBUG && log(remote, 'req(res.prefinish)', `${id}`);
       onResponsePrefinish && onResponsePrefinish(request, response, netSocket);
     });
     response.addListener('drain', function () {
-      log(remote, 'req(res.drain)', `${id}`);
+      DEBUG && log(remote, 'req(res.drain)', `${id}`);
     });
     response.addListener('end', function () {
-      log(remote, 'req(res.end)', `${id}`);
+      DEBUG && log(remote, 'req(res.end)', `${id}`);
     });
     response.addListener('close', function () {
-      log(remote, 'req(res.close)', `after ${id}.end()`);
+      DEBUG && log(remote, 'req(res.close)', `after ${id}.end()`);
       onResponseClose && onResponseClose(request, response, netSocket);
     });
 
     if (onRequest) {
       onRequest(request, response, nodeSocket);
     } else {
-      log(remote, 'request', 'closing + destroying');
+      DEBUG && log(remote, 'request', 'closing + destroying');
       // https://www.rfc-editor.org/rfc/rfc9110.html#section-15.3.1
       response.writeHead(200);
       response.end(null, () => {
@@ -528,10 +540,19 @@ function sha1Hash(value, type='binary', base='base64') {
 // Websocket handshake
 async function handleUpgrade(request, socket) {
   return new Promise((resolve, reject) => {
-    const protocols = request.headers['sec-websocket-protocol'];
     const key = request.headers['sec-websocket-key'];  
 
-    if (request.headers['upgrade'] !== 'websocket' || !key) {
+    const clientProtocols = request.headers['sec-websocket-protocol'].split(', ');
+    const protocols = [
+      'proto.joeys.app.utf8', 'proto.joeys.app.sql', 'proto.joeys.app.json',
+    ];
+    let protocolAllowed = false;
+    protocols.forEach(protocol => {
+      if (clientProtocols.indexOf(protocol) !== -1) {
+        protocolAllowed = true;
+      }
+    });
+    if (request.headers['upgrade'] !== 'websocket' || !key || !protocolAllowed) {
       // socket.write(headers(['HTTP/1.1 Bad Request']));
       socket.write('HTTP/1.1 Bad Request');
       socket.end();
@@ -550,6 +571,7 @@ async function handleUpgrade(request, socket) {
       'Upgrade: WebSocket',
       'Connection: Upgrade', 
       `Sec-WebSocket-Accept: ${websocketPairKey}`,
+      `Sec-WebSocket-Protocol: proto.joeys.app.utf8`,
     ]));
 
     _log('socketHandshake()', `write back signed sha1 header`);

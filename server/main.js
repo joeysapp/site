@@ -37,7 +37,9 @@ function RootServer() {
     onSocketData: function(request, response, netSocket, data) {
       let { url, method, headers} = request;
       let { host } = headers;
-      log(id, 'data', `${method} ${host} ${url} [${netSocket.contentType}]`);
+      if (url !== '/salmon-log') {
+        log(id, 'data', `${method} ${host} ${url} [${netSocket.contentType}]`);
+      }
 
       // These would just be like, a loaded in module we pass the data to I think?
       let isSalmonLogPost = (host === 'osrs.joeys.app' && method === 'POST' && url === '/salmon-log');
@@ -69,6 +71,8 @@ function RootServer() {
       // So I think a given netSocket needs to set their initial host otherwise idk how we know where the data/proto needs to go
       if (isWebsocketData) {
         let { URI, method } = data;
+        // It seems like chromium wraps what everything in a { auth, contentType, payload, requests, signature } where signature is the proto?
+        log('wat', `${what(data)}`);
         let endpoint = URI.join('/');
         if (endpoint === 'osrs/salmon/log') {            
           oldschoolInit(request, response, netSocket, data);
