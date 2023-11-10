@@ -38,7 +38,7 @@ function RootServer() {
       let { url, method, headers} = request;
       let { host } = headers;
       if (url !== '/salmon-log') {
-        log(id, 'data', `${method} ${host} ${url} [${netSocket.contentType}]`);
+        // log(id, 'data', `${method} ${host} ${url} [${netSocket.contentType}]`);
       }
 
       // These would just be like, a loaded in module we pass the data to I think?
@@ -72,7 +72,7 @@ function RootServer() {
       if (isWebsocketData) {
         let { URI, method } = data;
         // It seems like chromium wraps what everything in a { auth, contentType, payload, requests, signature } where signature is the proto?
-        log('wat', `${what(data)}`);
+        // log('main', `${what(data)}`);
         let endpoint = URI.join('/');
         if (endpoint === 'osrs/salmon/log') {            
           oldschoolInit(request, response, netSocket, data);

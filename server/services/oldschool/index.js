@@ -112,11 +112,11 @@ async function oldschoolRequest(request, response, netSocket, data) {
     let queryString = `insert into salmon_log  (osrs_chat_auth, osrs_chat_timestamp, osrs_chat_id, osrs_chat_type, osrs_chat_name, osrs_chat_rank, osrs_username, osrs_chat_entry) values ${preparedValueString} returning osrs_chat_auth, osrs_chat_timestamp, osrs_chat_entry;`;
 
     if (preparedValueString) {
-      log('oldschool', `pvstring`,`\n${what(preparedValueString)}\n${what(valueArray)}\n`);
+      // log('oldschool', `pvstring`,`\n${what(preparedValueString)}\n${what(valueArray)}\n`);
       db.query({
         text: queryString, values: valueArray,
       }).then(function({ rows, fields }) {
-        log('oldschool', 'rows', `\n${what(fields)}\n${what(rows)}\n`);
+        log('osrs', 'request', `${what(rows)}`);
         
         // Write out new SQL rows to connected frontend sockets
         let eventName = ['osrs', 'salmon', 'log'].join('/');
@@ -133,7 +133,7 @@ async function oldschoolRequest(request, response, netSocket, data) {
     return;   
   });
   } catch (err) {
-    log('id', 'data', `[ERR]\n${what(err)}`);
+    log('osrs', 'request', `[ERR]\n${what(err)}`);
     response.writeHeader(400);
     response.end();
     reject();

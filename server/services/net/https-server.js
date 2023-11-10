@@ -8,9 +8,9 @@ import crypto from 'node:crypto';
 
 import NetSocket from './net-socket.js';
 import { EventEmitter } from 'node:events';
-// import { RootEmitter } from '../index.js';
 import rootEmitter from '../root-emitter.js';
-import { what, log as _log, bold, underline, fg, bg } from '../../../common/utils/index.mjs';
+
+import { what, log as _log, bold, underline, fg, bg, numToBytes, msToTime } from '../../../common/utils/index.mjs';
 import Proto, { asFrame } from '../../../common/types/proto.mjs';
 
 const DEBUG = process.env.DEBUG || false;
@@ -18,7 +18,6 @@ const NETWORK_LAYERS = {
   application: '--', transport: 'tcp', internet: 'IPv4', link: 'MAC',
   remoteAddress: '', remotePort: '', localAddress: '', localPort: '',
 };
-
 const KEEPALIVE_INTERVAL = 55000;
 
 // List of all connections seen per IP. (e.g. GETs/POSTS)
@@ -77,7 +76,6 @@ function HttpsServer({
   onSocketEnd = function(netSocket, data) {
     let { ip, id } = netSocket;
     _log('https', `Need to remove [${ip}] ${id}`);
-    // connections[
     DEBUG && console.log('onSocketEnd', `${netSocket.net_socket_id}\n  ${what(data)}`);
   },
   onSocketFinish = function(netSocket, data) { DEBUG && console.log('onSocketFinish', `${netSocket.net_socket_id}\n  ${what(data)}`); },
@@ -101,54 +99,29 @@ function HttpsServer({
 
   rootEmitter.on(['osrs', 'salmon', 'log'].join('/'), function(proto) {
     // log({}, 'https.rootEmitter', `osrssalmonlog, going through all websockets :D\n${proto}`);
+
     let endpoint = ['osrs', 'salmon', 'log'].join('/');
     (websockets[endpoint] || []).forEach((netSocket, idx) => {
-      // return;
-      // .. This does nothing, but I wonder, is there an issue with the keepalive interval?
-      // netSocket.pipe().write(proto.protoToBuffer());
-
-      // This causes an EPIPE. Is this a proxy issue, or should we like, pipe it..? Idk..
-      // netSocket.write(proto.protoToBuffer());
-
-      // lol, I think there just has to be some buffer period between all these requests..
-      // Ideally we'd build like, a network queue I think...
-      // nope, this doesn't help. just prolongs a crash
-      // let RANDOM_TIME = 1000 + Math.random * 1000 + Math.random*1000;
-
-      // ORRRRRRRRRRRRRRRRRRRRR ideally just like, update chat to users every 30s or something..........
-      // setTimeout(() => {
-        try {
-          let { remote } = netSocket;
-          log(remote, 'https.rootEmitter', `netSocket[#${idx}] w/ readyState=${netSocket.readyState} writable=${netSocket.writable}`);
-          if (netSocket.readyState === 'writeOnly') {
-            // log({}, 'https.rootEmitter', '... not sure?');
-            // netSocket.uncork();
-          } else if (netSocket.readyState === 'open') {
-            log({}, 'https.rootEmitter', '... writing to!');
-            // FIguring out how to deal with the keepAlive writing..
-            netSocket.cork();
-            netSocket.write(asFrame(proto), 'buffer', function callback(foo) {
-              // ... I think having it here means that we'll only be sending them the stuff every 10s right, or w/e the keepalive interval is?
-              // netSocket.uncork();
-              log({}, 'https.rootEmitter', 'Succesfully wrote out proto to netSocket');
-            });
-            netSocket.uncork();
-          }
-          // netSocket.write(proto.protoToBuffer());
-          // asdf was 112s
-          // asdfasdf was 32s but ther ewas a lot happening in the chat...
-          // netSocket.write(Buffer.from('asdf1234'));
-        } catch (err) {
-          log({}, `https.rootemitter`, `failed to write to netsocket #${idx}\n${what(err)}`);
-        }
-      // }, RANDOM_TIME);
+      let { remote } = netSocket;
+      log(remote, 'https.rootEmitter', `netSocket[#${idx}] w/ readyState=${netSocket.readyState} writable=${netSocket.writable}`);
+      if (netSocket.readyState === 'writeOnly') {
+        log({}, 'https.rootEmitter', '... not sure?');
+        // netSocket.uncork();
+      } else if (netSocket.readyState === 'open') {
+        netSocket.cork();
+        netSocket.write(asFrame(proto), 'buffer', function callback(foo) {
+          log(remote, 'https.rootEmitter', 'Wrote out to netSocket');
+        });
+        netSocket.uncork();
+      }
     });
   });
 
   _httpsServer.addListener('connection', function(nodeSocket) {
     bindSocket(null, null, nodeSocket);
     // nodeSocket.setKeepAlive(true);
-    // So we don't have any of these afaik: 
+
+    // So we don't get any of these yet AFAIK:
     let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;   
     log(remote, 'connection');
 
@@ -188,7 +161,8 @@ function HttpsServer({
       onRead: onSocketRead,
       onFinish: onSocketFinish,
       onClose: onSocketClose,
-      // This is from a websocket closing on the frontend
+
+      // This is from a websocket .close on the frontend, which occurs onUnload.
       onEnd: function(nothing) {
         onSocketEnd(nothing);
         // ... Remove from our websockets?
@@ -286,25 +260,20 @@ function HttpsServer({
         log({}, 'upgrade', `-> Adding nodeSocket.keepAliveInterval`);
         // log({}, 'upgrade', `[todo] .. Attempt to bind all Proto eventListeners here..? \n Adding them here doesn't seem to work, so..`);
 
-        // Tried piping socket to itself, still can't have the keepalive interval and a rootemitter writing out protos..
-        // nodeSocket.pipe(nodeSocket);
         if (nodeSocket.keepAliveInterval) return;
         let keepAliveInterval = setInterval(function() {
-          // return;
-
-          // There's some issue with the rootEmitter trying to write out to the nodeSocket whil eit's writing like this
-          // nodeSocket.shift('0');
-          // I think writing
-          // log({}, `keepAlive`, `${nodeSocket.readyState} ${nodeSocket.writable}`);
+          // Cannot just add this AFAIK?
+          // nodeSocket.lifespan += KEEPALIVE_INTERVAL;
           if (nodeSocket.readyState === 'open') {
             // ... This is promising? A nodesocket could be writeOnly while a buffer is still waiting to be... flushed? out to the duplex socket...?
-            // nodeSocket.write(Buffer.from('0'));
             let { closed, destroyed, writable, writableAborted, writableEnded, writableCorked, writableFinished, writableHighWaterMark, writableLength, writableNeedDrain, writableObjectMode, 
-                bytesRead, bytesWritten, connecting, pending, readyState, allowHalfOpen, remote } = nodeSocket;
+                bytesRead, bytesWritten, connecting, pending, readyState, allowHalfOpen, remote, lifespan } = nodeSocket;
             let logObject = { closed, destroyed, writable, writableAborted, writableEnded, writableCorked, writableFinished, writableHighWaterMark, writableLength, writableNeedDrain, writableObjectMode, 
                             bytesRead, bytesWritten, connecting, pending, readyState, allowHalfOpen };
             // log({}, `keepAlive`, `\n${what(logObject)}`);
-            log(remote, `keepAlive`, `${nodeSocket.readyState} ${nodeSocket.writable} [-> ${what(bytesRead)} ${what(bytesWritten)} ->]`);
+
+            let lifespanString = msToTime(lifespan);
+            log(remote, `keepAlive`, `${lifespanString} [${numToBytes(bytesWritten)} tx, ${numToBytes(bytesRead)} rx]`);
 
             let proto = new Proto({
               URI: ['portal', 'keepalive'],
@@ -347,7 +316,7 @@ function HttpsServer({
             // containing sQL row(s) of new entries. The frontend will add to view.
             eventName: ['osrs', 'salmon', 'log'].join('/'),
             method: function(proto) {
-              log({}, 'osrs/salmon/log - nodeSocket heard event, will attempt to write proto to it');
+              log({}, 'osrs/salmon/log', `nodeSocket heard event! This was added in http-server.on(upgrade)!`);
               // nodeSocket.write(proto.asBuffer());
             },
           },
@@ -358,12 +327,11 @@ function HttpsServer({
             }
           }
         ];
-        // socketListeners.forEach(l => {
-        //   let { eventName, method } = l;
-        //   log({}, 'listeners', `+ ${eventName} [ Method ]`);
-        //    [NOT SURE if we need to prepend this to the socket? or rootEmitter..."
-        //   rootEmitter.prependListener(eventName, (proto) => method(proto));
-        // });
+        socketListeners.forEach(l => {
+          let { eventName, method } = l;
+          log({}, 'listeners', `+ Binding ${eventName} in http-server.on(upgrade)`);
+          rootEmitter.prependListener(eventName, (proto) => method(proto));
+        });
         
 
         try {
@@ -441,7 +409,7 @@ function bindSocket(request = null, response = null, nodeSocket = null) {
   let { accept, dnt, host, origin, upgrade, pragma } = headers;
   // _log('bindSocket', `\n\nheaders=${what(headers)}\n\n`);
 
-  if (request) {   
+  if (request) {
     nodeSocket.request = request;
     nodeSocket.response = response;
     nodeSocket.headers = headers;
@@ -455,6 +423,8 @@ function bindSocket(request = null, response = null, nodeSocket = null) {
     nodeSocket.statusMessage = statusMessage;
     nodeSocket.httpVersion = httpVersion;
 
+    nodeSocket.lifespan = 0;
+
     // remoteAddress will be set to reverse proxy in connection, but request/upgrade gives us this header
     nodeSocket.remote = {
       remotePort, remoteFamily,
@@ -467,9 +437,11 @@ function bindSocket(request = null, response = null, nodeSocket = null) {
   if (!nodeSocket.id && nodeSocket.remote) {
     let { remoteAddress } = nodeSocket.remote;
     let ip = remoteAddress;
+
     if (!connections[ip]) {
       connections[ip] = [];
     }
+
     try {
       let ct = connections[ip].length+1;
       let ipString = `${ip}`.split('.').reduce((acc, num, idx) => acc+`${num}`.padStart(3, ' ')+(idx < 3 ? '.' : ''), '');

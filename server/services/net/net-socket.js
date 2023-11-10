@@ -75,15 +75,9 @@ function NetSocket({
   // :-|
   let data = null;
 
-  function doLog() {
-    let { url } = headers || {};
-    if (url !== '/salmon-log') return true;
-    return false;
-  }
-
   const CREATED = Date.now();
   let _id = nodeSocket.id;
-  doLog() && log('init');
+  DEBUG && log('init');
   // LOG_NODE_SOCKET('init', 0);
 
   // I... think? we can't add listeners here, right after connection?
@@ -102,7 +96,7 @@ function NetSocket({
   // 
 
   nodeSocket.on('resume', function(nil) {
-    log('resume'); DEBUG && LOG_NODE_SOCKET('resume', 0);
+    DEBUG && log('resume'); DEBUG && LOG_NODE_SOCKET('resume', 0);
     data = null;
     readChunks = [];
     nodeSocket.on('session', function(session) {
@@ -138,12 +132,12 @@ function NetSocket({
   // * http GET with UPGRADE header
   // * Proto from an already-established connection
   nodeSocket.on('data', async function(buffer) {
-    const { headers, id, contentType, requests } = nodeSocket;
-    let msg = null;
-
+    const { headers, id, contentType = '', requests } = nodeSocket;
     log('data', `requests=${requests}`);
-    let isProto = nodeSocket.contentType.indexOf('proto.joeys.app') !== -1 && requests > 0;
+
+    let isProto = contentType.indexOf('proto.joeys.app') !== -1 && requests > 0;
     nodeSocket.requests += 1;
+    let msg = null;
 
     if (isProto) {
       msg = Proto.prototype.fromFrame(buffer);
@@ -156,7 +150,7 @@ function NetSocket({
         // nodeSocket.addListener(URI.join('/'), function(proto) {
         //   log(URI.join('/'), `[todo] Uh, do something I guess? Do we just write the proto?\n${what(proto)}`);
         // });
-        log('data', `[todo] Parse out proto - should this netsocket emit the event...? And the rootEmitter is listening for it?`);
+        // log('data', `[todo] Parse out proto - should this netsocket emit the event...? And the rootEmitter is listening for it?`);
         nodeSocket.emit(URI.join('/'), msg, nodeSocket);
         // log('data', `[Proto -> netSocket.addListener(URI), RootEmitter.emit([${URI.join('/')}])]\n${what(msg, { compact: true })}\nListeners=[${what(nodeSocket.eventNames())}]`);
       }

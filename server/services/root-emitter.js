@@ -55,7 +55,4 @@ function RootEmitter(props = {}) {
 };
 
 const rootEmitter = new RootEmitter();
-rootEmitter.on(['osrs', 'salmon', 'log'].join('/'), function(data) {
-  console.log(`root-emitter heard osrs/salmon/log: ${data}`);
-});
 export default rootEmitter;

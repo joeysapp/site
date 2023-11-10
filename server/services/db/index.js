@@ -169,7 +169,7 @@ export default function Database(settings = {}) {
       try {
         if (doLog) {
           let s = text;
-          // s = s.substring(0, 30);
+          s = s.substring(0, 30);
           s += '..'; s = `${s.padEnd(32, ' ')}`;
           s = fg([100, 100, 100], s); s += ` -> <${bold(type)}>`;
           log('query()', s);
