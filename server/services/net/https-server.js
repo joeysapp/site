@@ -29,6 +29,10 @@ let connections = {
 // .. Currently, this is a websockets[URI] = [...socket1, socket2]...
 // .. This should probably be like, endpoints.
 let websockets = {};
+let knownURIs = {
+  // `osrs/salmon/log`: [ socket... socket... ]
+
+};
 
 function doLog(request, response) {
   let { url } = request;
@@ -50,18 +54,38 @@ function logEverySeenConnection() {
     }
     return `${cAcc}${socketString}`;
   }, '');
-  _log('RootServer', `connections${cString}`);
-
+  _log({}, 'https', `connections${cString}`);
 }
-// setInterval(() => {
-//   logEverySeenConnection();
-// }, KEEPALIVE_INTERVAL);
+
+// We will bind these listeners to every upgraded websocket, which our rootEmitter can emit, e.g.:
+// * https.on(request), heard [POST salmon/log [DATA]] -> write to SQL, emit that data to all connected sockets
+let socketListeners = [
+  {
+    // When we sigint the server, do this with the nodesocket. Probably ask it to refresh in 10-20s?
+    eventName: 'shutdown',
+    method: function() {
+      log(remote, 'sigint', '[todo] nodeSocket heard sigint.');
+    },
+  },
+  {
+    // POST osrs.joeys.app/salmon-log will save item and emit a proto
+    // containing sQL row(s) of new entries. The frontend will add to view.
+    eventName: ['osrs', 'salmon', 'log'].join('/'),
+    method: function(proto) {
+      log(remote, 'osrs/salmon/log', `nodeSocket heard event! This was added in http-server.on(upgrade)!`);
+      // nodeSocket.write(proto.asBuffer());
+    },
+  },
+  {
+    eventName: ['axidraw'].join('/'),
+    method: function(proto) {
+      // nodeSocket.write(proto.asBuffer());
+    }
+  }
+];
 
 function HttpsServer({
-  id,
-  host,
-  port,
-
+  id, host, port,
   onConnection,
   onRequest,
   onUpgrade,
@@ -73,13 +97,9 @@ function HttpsServer({
   onSocketResume,
   onSocketReadable,
   onSocketRead,
-  onSocketEnd = function(netSocket, data) {
-    let { ip, id } = netSocket;
-    _log('https', `Need to remove [${ip}] ${id}`);
-    DEBUG && console.log('onSocketEnd', `${netSocket.net_socket_id}\n  ${what(data)}`);
-  },
-  onSocketFinish = function(netSocket, data) { DEBUG && console.log('onSocketFinish', `${netSocket.net_socket_id}\n  ${what(data)}`); },
-  onSocketClose = function(netSocket, data) { DEBUG && console.log('onSocketClose', `${netSocket.net_socket_id}\n  ${what(data)}`); },
+  onSocketEnd,
+  onSocketFinish,
+  onSocketClose,
 }) {
   let _httpsServer;
   let _id;
@@ -98,15 +118,12 @@ function HttpsServer({
   log({}, 'init');
 
   rootEmitter.on(['osrs', 'salmon', 'log'].join('/'), function(proto) {
-    // log({}, 'https.rootEmitter', `osrssalmonlog, going through all websockets :D\n${proto}`);
-
     let endpoint = ['osrs', 'salmon', 'log'].join('/');
     (websockets[endpoint] || []).forEach((netSocket, idx) => {
       let { remote } = netSocket;
-      log(remote, 'https.rootEmitter', `netSocket[#${idx}] w/ readyState=${netSocket.readyState} writable=${netSocket.writable}`);
+      log(remote, 'https.rootEmitter', `netSocket[#${idx}] readyState=${netSocket.readyState} writable=${netSocket.writable}`);
       if (netSocket.readyState === 'writeOnly') {
         log({}, 'https.rootEmitter', '... not sure?');
-        // netSocket.uncork();
       } else if (netSocket.readyState === 'open') {
         netSocket.cork();
         netSocket.write(asFrame(proto), 'buffer', function callback(foo) {
@@ -120,23 +137,20 @@ function HttpsServer({
   _httpsServer.addListener('connection', function(nodeSocket) {
     bindSocket(null, null, nodeSocket);
     // nodeSocket.setKeepAlive(true);
+    // So we don't get any of these yet AFAIK
+    let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;
 
-    // So we don't get any of these yet AFAIK:
-    let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;   
     log(remote, 'connection');
-
     // Wrapper for the actual nodesocket, adding in basic handlers
     let netSocket = new NetSocket({
       nodeSocket,
       onData: function(request, response, netSocket, data) {
-        onSocketData(request, response, netSocket, data);
-        let { headers, id, contentType, requests } = nodeSocket;
+        let { headers, id, contentType, requests, remote } = nodeSocket;
 
-        // Handled a websocket's initial request/upgrade, we are now receiving proto data:
+        // [info] Handled socket's initial data->onSocketData->[request/upgrade], now recv protos:
         if (netSocket.keepAliveInterval && contentType.indexOf('proto.joeys.app') !== -1) {
-          let { URI, method, opCode } = data;
+          let { URI = [], method = [], opCode } = data;
           let endpoint = URI.join('/');
-
           // [todo] Figure out like, listening method
 
           // How do we handle initial connections - do this to keep it generic..?
@@ -145,45 +159,54 @@ function HttpsServer({
 
           // This will be for handling URIs that we want the http-server to be able to talk to, e.g. a live chatroom
           if (!websockets[URI.join('/')]) {
-            // Weird run condition on refreshing sockets, just be explicit w/ if/else.
             websockets[URI.join('/')] = [];
           }
           websockets[URI.join('/')].push(netSocket);
-          _log('https', 'onSocketData', `Registering rootEmitter.on(${URI.join('/')}) -> [${websockets[URI.join('/')].length}]`);
-          // ... This is being handled in the above RootServer ATM.
-          // if (endpoint === 'osrs/salmon/log') {            
-          //   oldschoolInit(request, response, netSocket, data);
-          // }
+          log(remote, 'onSocketData', `Registering rootEmitter.on(${URI.join('/')}) -> [${websockets[URI.join('/')].length}]`);
         }
+
+        // [TODO] The parent RootServer is handling this:
+        // - salmon-log POSTS .. and
+        // - proto(osrs/salmon/log, [*]) to initially populate the view.
+        onSocketData(request, response, netSocket, data);
       },
       onResume: onSocketResume,
       onReadable: onSocketReadable,
       onRead: onSocketRead,
-      onFinish: onSocketFinish,
-      onClose: onSocketClose,
-
-      // This is from a websocket .close on the frontend, which occurs onUnload.
-      onEnd: function(nothing) {
-        onSocketEnd(nothing);
-        // ... Remove from our websockets?
+      onFinish: function(nothing) {
+        log(remote, 'socketFinish', `${what(nothing)}`);
+        onSocketFinish(nothing);
+      },
+      onClose: function(nodeSocket) {
+        DEBUG && log(remote, 'socketClose', `[ nodeSocket ]`);
+        // Emits on any plain HTTP (post, get) and after we hear websocket.end and then close it.
+        onSocketClose && onSocketClose(nodeSocket);
+      },
+      onEnd: function(nodeSocket) {
+        DEBUG && log(remote, 'socketEnd', `[ nodeSocket ]`);
+        // Emits on a frontend's window.onunmount, which then calls .end and we hear it here.
+        if (onSocketEnd) {
+          onSocketEnd(nodeSocket);
+        } else {
+          // We need to properly signal to it close it, otherwise it'll just timeout.
+          // [todo] ... Remove from our connection pool and URI listeners?
+          nodeSocket.destroy();
+        }
       },
     });
     onConnection && onConnection(netSocket);
   });
 
+  // Likeliest a POST, unless there is a GET we are not handling with nginx.
   _httpsServer.addListener('request', function(request, response) {
-    // Bind socket setting ID and other items
-    let { socket: nodeSocket, data, reusedSocket } = request;
+    let { socket: nodeSocket = {}, data, reusedSocket } = request;
     bindSocket(request, response, nodeSocket);
-    let netSocket = nodeSocket;
 
     let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests } = nodeSocket;
     let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests, data, reusedSocket };
     if (url !== '/salmon-log') {
       log(remote, 'request', `\n${what(printObj, { compact: true })}`);
     }
-
-    // Just hang them, this works
     if (shouldBlock(request, response, nodeSocket)) {
       handleBlock(request, response, nodeSocket)
         .then(() => {
@@ -192,6 +215,7 @@ function HttpsServer({
       return;
     }
 
+    // Request listeners
     request.addListener('socket', function(nodeSocket) {
      DEBUG && log(remote, 'req(req.socket)', `${id} nodeSocket` );
     });
@@ -203,15 +227,15 @@ function HttpsServer({
     });   
     request.addListener('end', function() {
       DEBUG && log(remote, 'req(req.end)', `${id}` );
-    });   
-
+    });
+    // Response
     response.addListener('finish', function () {
       DEBUG && log(remote, 'req(res.finish)', `after ${id}.end()`);
-      onResponseFinish && onResponseFinish(request, response, netSocket);
+      onResponseFinish && onResponseFinish(request, response, nodeSocket);
     });
     response.addListener('prefinish', function () {
       DEBUG && log(remote, 'req(res.prefinish)', `${id}`);
-      onResponsePrefinish && onResponsePrefinish(request, response, netSocket);
+      onResponsePrefinish && onResponsePrefinish(request, response, nodeSocket);
     });
     response.addListener('drain', function () {
       DEBUG && log(remote, 'req(res.drain)', `${id}`);
@@ -221,7 +245,7 @@ function HttpsServer({
     });
     response.addListener('close', function () {
       DEBUG && log(remote, 'req(res.close)', `after ${id}.end()`);
-      onResponseClose && onResponseClose(request, response, netSocket);
+      onResponseClose && onResponseClose(request, response, nodeSocket);
     });
 
     if (onRequest) {
@@ -239,14 +263,12 @@ function HttpsServer({
 
   _httpsServer.on('upgrade', function(request, nodeSocket, head) {
     bindSocket(request, null, nodeSocket);
-
-    // [todo] Seeing if we need to do request.setSocketKeepAlive() too?
     // nodeSocket.setKeepAlive(true);
-    let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests, contentType } = nodeSocket;
+
+    let { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests, contentType, lifespan } = nodeSocket;
     let printObj = { headers, url, method, statusCode, statusMessage, httpVersion, id, remote, requests, contentType };
 
     log(remote, 'upgrade', `\n${what(printObj, { compact: true })}`);
-
     if (shouldBlock(request, null, nodeSocket)) {
       handleBlock(request, null, nodeSocket)
         .then(() => {
@@ -257,24 +279,15 @@ function HttpsServer({
 
     handleUpgrade(request, nodeSocket, head)
       .then((something) => {
-        log({}, 'upgrade', `-> Adding nodeSocket.keepAliveInterval`);
-        // log({}, 'upgrade', `[todo] .. Attempt to bind all Proto eventListeners here..? \n Adding them here doesn't seem to work, so..`);
+        log(remote, 'upgrade', `+ adding keepAliveInterval`);
+        // if (nodeSocket.keepAliveInterval) return;
 
-        if (nodeSocket.keepAliveInterval) return;
         let keepAliveInterval = setInterval(function() {
-          // Cannot just add this AFAIK?
-          // nodeSocket.lifespan += KEEPALIVE_INTERVAL;
+          let { readyState, lifespan, requests, bytesWritten, bytesRead } = nodeSocket;
+          nodeSocket.lifespan += KEEPALIVE_INTERVAL;
           if (nodeSocket.readyState === 'open') {
-            // ... This is promising? A nodesocket could be writeOnly while a buffer is still waiting to be... flushed? out to the duplex socket...?
-            let { closed, destroyed, writable, writableAborted, writableEnded, writableCorked, writableFinished, writableHighWaterMark, writableLength, writableNeedDrain, writableObjectMode, 
-                bytesRead, bytesWritten, connecting, pending, readyState, allowHalfOpen, remote, lifespan } = nodeSocket;
-            let logObject = { closed, destroyed, writable, writableAborted, writableEnded, writableCorked, writableFinished, writableHighWaterMark, writableLength, writableNeedDrain, writableObjectMode, 
-                            bytesRead, bytesWritten, connecting, pending, readyState, allowHalfOpen };
-            // log({}, `keepAlive`, `\n${what(logObject)}`);
-
-            let lifespanString = msToTime(lifespan);
+            let lifespanString = `${msToTime(nodeSocket.lifespan)}`;
             log(remote, `keepAlive`, `${lifespanString} [${numToBytes(bytesWritten)} tx, ${numToBytes(bytesRead)} rx]`);
-
             let proto = new Proto({
               URI: ['portal', 'keepalive'],
               method: ['post'],
@@ -282,41 +295,31 @@ function HttpsServer({
               data: {},
             });
             nodeSocket.cork();
-            nodeSocket.write(asFrame(proto), 'binary', function(cb) {
-              // log({}, `keepalive`, 'keepalive callback');
-              // nodeSocket.uncork();
-            });
+            nodeSocket.write(asFrame(proto), 'binary', function(cb) { });
             nodeSocket.uncork();
           } else if (nodeSocket.readyState === 'writeOnly') {
-            // seems to be causing crashes too... only do cork/uncork in the emitter maybe?
-            // log({}, `keepAlive`, `Attempting to ... uncork? ... no, not doing anything...?`);
-           // nodeSocket.uncork();
+            log(remote, `keepalive`, '[todo] This socket should have been removed from connection pool and its interval cleared on .end/close.');
           }
-          // huh.. uh. this kind of worked? 
-          // nodeSocket.pipe(nodeSocket);
         }, KEEPALIVE_INTERVAL);
         nodeSocket.keepAliveInterval = keepAliveInterval;
-        // // nodeSocket.keepAliveInterval = true;
 
-        // This would be passed in from main.js?
-        // This will allow our RootEmitter to emit protos and a socket can hear it.
-        // nodeSocket.prependListener(['osrs', 'salmon', 'log'].join('/'), function(proto) {
-        //   log({}, 'upgrade', 'heard osrs/salomnoafdsfoasdlfoasdflaosdflasdofloasdfl');
-        // });
-
+        // We will bind these listeners to connected websockets,
+        // which our rootEmitter will emit when necessary, e.g.:
+        // * https.on(request), POST salmon/log, emit that data to all connected sockets.
         let socketListeners = [
-          // {
-          //   eventName: 'shutdown',
-          //   method: function() {
-          //     log({}, 'sigint - [todo] nodeSocket heard sigint');
-          //   },
-          // },
+          {
+            // When we sigint the server, do this with the nodesocket. Probably ask it to refresh in 10-20s?
+            eventName: 'shutdown',
+            method: function() {
+              log(remote, 'sigint', '[todo] nodeSocket heard sigint.');
+            },
+          },
           {
             // POST osrs.joeys.app/salmon-log will save item and emit a proto
             // containing sQL row(s) of new entries. The frontend will add to view.
             eventName: ['osrs', 'salmon', 'log'].join('/'),
             method: function(proto) {
-              log({}, 'osrs/salmon/log', `nodeSocket heard event! This was added in http-server.on(upgrade)!`);
+              log(remote, 'osrs/salmon/log', `nodeSocket heard event! This was added in http-server.on(upgrade)!`);
               // nodeSocket.write(proto.asBuffer());
             },
           },
@@ -327,28 +330,16 @@ function HttpsServer({
             }
           }
         ];
+        
         socketListeners.forEach(l => {
           let { eventName, method } = l;
-          log({}, 'listeners', `+ Binding ${eventName} in http-server.on(upgrade)`);
+          log(remote, 'listeners', `+ Binding ${eventName} in http-server.on(upgrade)`);
           rootEmitter.prependListener(eventName, (proto) => method(proto));
         });
-        
 
-        try {
-          nodeSocket.addListener('shutdown', function(foo) {
-            log({}, `nodeSocket.on(shutdown) ${foo}`);
-          });
-          nodeSocket.addListener('osrs/salmon/log', function(foo) {
-            log({}, `nodeSocket.on(osrs/salmon/log) ${foo}`);
-          });
-        } catch(err) {
-          log({}, `[ERR]\n\n${what(err)}\n\n`);
-        }
-
-        // [todo] Add to connection pool
-        // .... Figure out how to do this with separate hosts, handle connections externally, etc.
+        // [todo] Connection pooling
       }).catch((error) => {
-        log({}, 'upgrade', `[ERR] ${error}`);
+        log(remote, 'upgrade', `[ERR] \n${what(error)}`);
         nodeSocket.write("500 / Error");
         nodeSocket.end();
       });
@@ -363,22 +354,16 @@ function HttpsServer({
     log({}, 'clientError', `\n${what(error, { showHidden: false, compact: false })}`);
     nodeSocket.destroy();
   });
-
   _httpsServer.on('error', function(error) {
     log({}, 'error', `\n\n${what(error, { showHidden: false, compact: false, })}\n\n`);
-    // _httpsServer.close();
     RootEmitter.emit('shutdown', function httpsServerError(uhh_idk) {
       log({}, 'error->shutdown', `Emitted shutdown event after error ${what(uhh_idk)}`);
-      // uhh_idk();
     });
   });
   _httpsServer.on('close', function() {
     log({}, 'close', 'httpsServer.error -> closing');
   });
-  _httpsServer.listen({
-    host,
-    port,
-  });
+  _httpsServer.listen({ host, port });
 
   function log(remote = {}, a='', b='', c='', d='') {
     const { address = '--', port = '--', family = '--' } = _httpsServer.address() || {};
@@ -398,12 +383,12 @@ function HttpsServer({
 }
 export default HttpsServer;
 
-// TBD where these functions should go
-// Is fired on: 
+// Utilities
+
+// This occurs in:
 // 1. connection            (null,              null, nodeSocket)
 // 2. request OR upgrade    (req = { headers }, res, nodeSocket)
 function bindSocket(request = null, response = null, nodeSocket = null) {
-  // 1. connection(null, null, nodeSocket);
   let { remoteAddress, remotePort, remoteFamily } = nodeSocket;
   let { headers = {}, method, url, statusCode, statusMessage, httpVersion } = request || {};
   let { accept, dnt, host, origin, upgrade, pragma } = headers;
@@ -415,70 +400,55 @@ function bindSocket(request = null, response = null, nodeSocket = null) {
     nodeSocket.headers = headers;
     nodeSocket.contentType = headers['sec-websocket-protocol'] || headers['content-type'];
     nodeSocket.ua = headers['user-agent'];
-
     // TBD if these will be helpful:
     nodeSocket.method = method;
     nodeSocket.url = url;
     nodeSocket.statusCode = statusCode;
     nodeSocket.statusMessage = statusMessage;
     nodeSocket.httpVersion = httpVersion;
-
-    nodeSocket.lifespan = 0;
-
     // remoteAddress will be set to reverse proxy in connection, but request/upgrade gives us this header
     nodeSocket.remote = {
       remotePort, remoteFamily,
       remoteAddress: headers['x-real-ip'] || remoteAddress,
     };
-  };
-  
-  // On upgrade or data, set ID
+  }; 
   nodeSocket.requests = 0;
+  nodeSocket.lifespan = 0;
+  // Remote set in .request or .upgrade, fired after .data fired after .onSocketData
   if (!nodeSocket.id && nodeSocket.remote) {
     let { remoteAddress } = nodeSocket.remote;
     let ip = remoteAddress;
 
+    // This was for....
+    // .... this was for....
+
+
     if (!connections[ip]) {
       connections[ip] = [];
     }
-
-    try {
-      let ct = connections[ip].length+1;
-      let ipString = `${ip}`.split('.').reduce((acc, num, idx) => acc+`${num}`.padStart(3, ' ')+(idx < 3 ? '.' : ''), '');
-      let id = `${ipString}/`+`${ct}`.padStart(3, '0')+'';
+    let ct = connections[ip].length + 1;
+    let ipString = `${ip}`.split('.').reduce((acc, num, idx) => acc+`${num}`.padStart(3, ' ')+(idx < 3 ? '.' : ''), '');
+    let id = `${ipString}/`+`${ct}`.padStart(3, '0')+'';
       
-      nodeSocket.id = id;
-      nodeSocket.ip = ip;
-      connections[ip] = [ ...connections[ip], nodeSocket ];
-    } catch (err) {
-      log('ERR', `${what(err)}`);
-    }
+    nodeSocket.id = id;
+    nodeSocket.ip = ip;
+    connections[ip] = [ ...connections[ip], nodeSocket ];
   } else {
     nodeSocket.requests += 1;
   }
 }
 
-function shouldBlock(request, response, nodeSocket) {
-  let { headers, method, url, statusCode, statusMessage, httpVersion } = request || {};
+function shouldBlock(request = {}, response, nodeSocket) {
+  let { headers = {}, method, url, statusCode, statusMessage, httpVersion } = request;
   let { accept, dnt, host, origin, upgrade, pragma } = headers;
-  let ip = headers['x-real-ip'] || nodeSocket.ip;
-  let protocol = headers['x-forwarded-proto']; // https;
-  
-  // Prevent any get/posts to the IP entirely (nginx could/should probably do this)
-  // It'll be IP:WS_SOCKET_PORT for the ws forwarding
-  if (host === process.env.SITE_ADDRESS) {
-    return true;
-  }
+  let block = false;
 
+  let ip = headers['x-real-ip'] || nodeSocket.ip;
   let blockedIPs = (process.env.BLOCKED_IPV4 || '').split(';');
   if (blockedIPs.indexOf(ip) !== -1) {
     return true;
   }
-
-  let blockedUserAgents = [
-    'Cloud mapping experiment. Contact research@pdrlabs.net',
-  ];
-
+  // let protocol = headers['x-forwarded-proto'];
   return false;
 }
 
@@ -488,23 +458,20 @@ async function handleBlock(request, response=null, nodeSocket) {
     let msg = `HTTP ${httpVersion} / Bad Request`;
     setTimeout(() => {
       if (response) {
-        // response.write(msg);
         response.end(msg, () => {
           resolve();
         });
       } else {
-        // nodeSocket.write(msg);
         nodeSocket.end(msg, () => {
           resolve();
         });
       }
-      // Can't callback, this is a ReadableStream
       request.destroy();
     }, 1000);
   });
 }
 
-
+// Websocket utilities
 function sha1Hash(value, type='binary', base='base64') {
   return crypto.createHash('sha1').update(value, type).digest(base);
 }
@@ -512,31 +479,29 @@ function sha1Hash(value, type='binary', base='base64') {
 // Websocket handshake
 async function handleUpgrade(request, socket) {
   return new Promise((resolve, reject) => {
-    const key = request.headers['sec-websocket-key'];  
-
+    let protocolAllowed = false;
     const clientProtocols = request.headers['sec-websocket-protocol'].split(', ');
     const protocols = [
-      'proto.joeys.app.utf8', 'proto.joeys.app.sql', 'proto.joeys.app.json',
+      'proto.joeys.app.utf8',
+      'proto.joeys.app.sql',
+      'proto.joeys.app.json',
     ];
-    let protocolAllowed = false;
     protocols.forEach(protocol => {
       if (clientProtocols.indexOf(protocol) !== -1) {
         protocolAllowed = true;
       }
     });
+    const key = request.headers['sec-websocket-key'];
     if (request.headers['upgrade'] !== 'websocket' || !key || !protocolAllowed) {
-      // socket.write(headers(['HTTP/1.1 Bad Request']));
       socket.write('HTTP/1.1 Bad Request');
       socket.end();
       reject();
     }
 
     // [ref] GUID from websocket whitepaper
-    // https://github.com/websockets/ws/blob/master/doc/ws.md#event-headers
     const upgradeGUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
     const websocketPairKey = sha1Hash([key, upgradeGUID].join(''));
     function combineHeaders(h) { return h.join('\r\n') + '\r\n\r\n'; }
-
     // [note] the Sec-Websocket-Accept key here could be modified for own janky ws connection
     socket.write(combineHeaders([
       'HTTP/1.1 101 Web Socket Protocol Handshake',
@@ -545,8 +510,6 @@ async function handleUpgrade(request, socket) {
       `Sec-WebSocket-Accept: ${websocketPairKey}`,
       `Sec-WebSocket-Protocol: proto.joeys.app.utf8`,
     ]));
-
-    _log('socketHandshake()', `write back signed sha1 header`);
     resolve();
   });
 }

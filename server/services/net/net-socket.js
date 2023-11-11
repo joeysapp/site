@@ -6,19 +6,9 @@ import { EventEmitter } from 'node:events';
 import { RootEmitter } from '../index.js';
 import rootEmitter from '../root-emitter.js';
 
-const NETWORK_LAYERS = {
-  application: '--', transport: 'TCP', internet: '--', link: 'MAC',
-  remoteAddress: '', remotePort: '', localAddress: '', localPort: '',
-};
-
 const DEBUG = process.env.DEBUG;
-const SHOW_READABLE = false;
-
 function NetSocket({
   nodeSocket = {},
-  // request = {},
-  // response = {},
-
   onData,
   onResume,
   onReadable,
@@ -26,7 +16,6 @@ function NetSocket({
   onEnd,
   onFinish,
   onClose,
-
   timeout = false,
   onTimeout = function(nodeSocket, timeout) {
     log('NetSocket', 'timeout', 'nodeSocket.end()/nodeSocket.destroy();');
@@ -45,6 +34,8 @@ function NetSocket({
     localFamily,
     localPort,
     headers = {},
+    lifespan,
+    requests,
   } = nodeSocket;
   
   function LOG_NODE_SOCKET(method, idx) {
@@ -71,74 +62,49 @@ function NetSocket({
     };
     console.log(`\n\n ${method} ${idx}\n${what(nodeSocketOptions)}`);
   }
-  let readChunks = [];
-  // :-|
   let data = null;
+  let readChunks = [];
 
   const CREATED = Date.now();
   let _id = nodeSocket.id;
   DEBUG && log('init');
-  // LOG_NODE_SOCKET('init', 0);
-
-  // I... think? we can't add listeners here, right after connection?
-  // nodeSocket.on('shutdown', function(nil) {
-  //   log('shutdown', 'set in constructor?');
-  // });
-  // nodeSocket.on('osrs/salmon/log', function(proto) {
-  //   log('osrs/salmon/log', `set in constructor? ${what(proto)}`);
-  // });
-  // let { upgrade = '' } = headers;
-  // if (upgrade === 'websocket') {
-  //   rootEmitter.on(['osrs', 'salmon', 'log'].join('/'), function(data) {
-  //     log('rootEmitter', `[osrs/salmon/log] Heard this, so write it back to socket: ${data}`);
-  //   });
-  // }
-  // 
 
   nodeSocket.on('resume', function(nil) {
-    DEBUG && log('resume'); DEBUG && LOG_NODE_SOCKET('resume', 0);
+    DEBUG && log('resume');
     data = null;
     readChunks = [];
     nodeSocket.on('session', function(session) {
       log('resume.session');
     });
-
   });
+
   nodeSocket.on('readable', function() {
-    (SHOW_READABLE || DEBUG) && log('readable', 'init', ``);
+    DEBUG && log('readable', 'init', ``);
     let chunk;
     while ((chunk = nodeSocket.read()) !== null) {
-      (SHOW_READABLE || DEBUG) && log('readable', `read in <${chunk.length} b>`);
+      DEBUG && log('readable', `read in <${chunk.length} b>`);
       readChunks.push(chunk);
     }
     DEBUG && LOG_NODE_SOCKET('readable', 2);
 
-    // This probabaly won't work for large posts, but does for WSS.
-    // setDataToString();
-
-    
     if (nodeSocket.readyState === 'open' && nodeSocket.timeout === 0 ) {
-      (SHOW_READABLE || DEBUG) && log('readable', 'fin socket.readyState=open / socket.timeout=0');
+      DEBUG && log('readable', 'fin socket.readyState=open / socket.timeout=0');
     } else if (nodeSocket.readyState === 'open') {
-      (SHOW_READABLE || DEBUG) && log('readable', 'fin socket.readyState=open');
+      DEBUG && log('readable', 'fin socket.readyState=open');
     } else {
-      (SHOW_READABLE || DEBUG) && log('readable', `fin socket.readyState=${nodeSocket.readyState} (..we already wrote to it? and it's ending?)`);
+      DEBUG && log('readable', `fin socket.readyState=${nodeSocket.readyState} (..we already wrote to it?.. it's ending?)`);
     }
   });
 
-  // This can be:
-  // * http GET, e.g. favicon
-  // * http POST
-  // * http GET with UPGRADE header
-  // * Proto from an already-established connection
+  // * http get/post/whatever (w/ upgrade header)
+  // * proto from an upgraded prior socketData->data->upgrade->...
   nodeSocket.on('data', async function(buffer) {
-    const { headers, id, contentType = '', requests } = nodeSocket;
-    log('data', `requests=${requests}`);
+    const { headers, id, contentType = '', requests, lifespan } = nodeSocket;
+    log('data', `reqs= ${requests} lifespan=${nodeSocket.lifespan}`);
+    nodeSocket.requests += 1;
 
     let isProto = contentType.indexOf('proto.joeys.app') !== -1 && requests > 0;
-    nodeSocket.requests += 1;
     let msg = null;
-
     if (isProto) {
       msg = Proto.prototype.fromFrame(buffer);
       let isActuallyBuffer = msg.readBigInt64BE
@@ -146,25 +112,26 @@ function NetSocket({
         msg = buffer.toString('utf8');
         log('data', `[ERR - NOT Proto, likely first request.]\n${what(msg, { compact: true })}`);
       } else {
-        let { URI } = msg;
-        // nodeSocket.addListener(URI.join('/'), function(proto) {
-        //   log(URI.join('/'), `[todo] Uh, do something I guess? Do we just write the proto?\n${what(proto)}`);
-        // });
-        // log('data', `[todo] Parse out proto - should this netsocket emit the event...? And the rootEmitter is listening for it?`);
+        let { URI = [] } = msg;
+        // Emit from this nodeSocket so the parent rootEmitter in https-server
+        // will hear it and pass the proto and this socket to that URI.
         nodeSocket.emit(URI.join('/'), msg, nodeSocket);
-        // log('data', `[Proto -> netSocket.addListener(URI), RootEmitter.emit([${URI.join('/')}])]\n${what(msg, { compact: true })}\nListeners=[${what(nodeSocket.eventNames())}]`);
       }
     } else {
       // } else if (nodeSocket.contentType.indexOf('application/json') !== -1) {
       let string = buffer.toString('utf8');
       let requestRows = string.split('\r\n');
       let signature = requestRows.shift().toLowerCase();
-      let payload = requestRows.pop();
-      try {
-        payload = JSON.parse(payload);
-      } catch {
-
+      let payload = requestRows.pop();      
+      // GETs will just be an empty string. See if the (POST?) is json.
+      if (payload) {
+        try {
+          payload = JSON.parse(payload);
+        } catch (err) {
+          log('data', `[ERR - Received POST that is not JSON.]\n${what(payload)}`);        
+        }
       }
+
       requestRows.pop();
       let headers = requestRows.reduce((acc, header, idx) => {
         let [key, val] = header.split(': ');
@@ -185,7 +152,6 @@ function NetSocket({
       };
       DEBUG && log('data', `\n${what(msg, { compact: true })}`);
     }
-
     // [tbd] Passing out info for various handlers...? Might not be needed.
     if (onData) {
       onData(nodeSocket.request, nodeSocket.response, nodeSocket, msg);      
@@ -222,22 +188,23 @@ function NetSocket({
     };
     log('setDataToString()', `\n${what(data), { compact: false }}`);
   }
-  nodeSocket.on('end', function() {
-    log('end', `age=${(Date.now() - CREATED)/1000.0} s`);
-    if (!data) {
-      // setDataToString();
-    }
-    onEnd && onEnd(this, data);
-  });
+
   nodeSocket.on('finish', function(error) {
     log('finish');
     onFinish && onFinish(this, data);
   });
+  nodeSocket.on('end', function() {
+    log('end', `requests=${nodeSocket.requests} age= ${(Date.now() - CREATED)/1000.0} lifespan=${nodeSocket.lifespan}`);
+    // if (!data) {
+    //    setDataToString();
+    // }
+    onEnd && onEnd(this, data);
+  });
   nodeSocket.on('close', function(hadError = true) {
-    log('close', `age=${(Date.now() - CREATED)/1000.0} s`);
-    if (!data) {
-      // setDataToString();
-    }
+    log('close', `requests=${nodeSocket.requests} age= ${(Date.now() - CREATED)/1000.0} lifespan=${nodeSocket.lifespan}`);
+    // if (!data) {
+    //   setDataToString();
+    // }
     onClose && onClose(this, data);
   });
 
@@ -256,19 +223,15 @@ function NetSocket({
 
 
   function log(a='', b='', c='', d='') {
-    // _id = `${id}<`+`???`.padStart(5, ' ')+'>';
-    // _id = `${id}<_______>`;
-
     // After .on(close), our server and the socket will no longer be bound.
-    const { address = '--', port = '--', family = '--' } = nodeSocket.address();
+    const { address = '', port = '', family = '' } = nodeSocket.address();
+
     // Our reverse proxy will be shown here, so look at remote that we set in http-server/bindSocket
     let { remote = {} } = nodeSocket;    
     let { remoteAddress, remotePort, remoteFamily } = remote;
-
-    let application = nodeSocket.encrypted ? 'tls' : 'net';
     const _NETWORK_LAYERS = {
-      ...NETWORK_LAYERS,
-      application,
+      application: nodeSocket.encrypted ? 'tls' : 'net',
+      transport: 'tcp', link: 'mac',      
       localAddress: address,
       localPort: port,
       remoteAddress,
@@ -277,9 +240,6 @@ function NetSocket({
     };
     _id = nodeSocket.id;
     _log(_NETWORK_LAYERS, _id, a, b, c, d);
-    if (family !== remoteFamily) {
-      // _log(_NETWORK_LAYERS, id, `localFamily !== remoteFamily, ${family} !== ${remoteFamily}`);
-    }
   };
   return nodeSocket;
 }
