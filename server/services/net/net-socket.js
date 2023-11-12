@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events';
 import { RootEmitter } from '../index.js';
 import rootEmitter from '../root-emitter.js';
 
-const DEBUG = process.env.DEBUG;
+const DEBUG = process.env.DEBUG !== "0";
 function NetSocket({
   nodeSocket = {},
   onData,

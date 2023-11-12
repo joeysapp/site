@@ -39,6 +39,7 @@ function RootServer() {
 
       let isSalmonLogPost = (host === 'osrs.joeys.app' && method === 'POST' && url === '/salmon-log');
       if (isSalmonLogPost) {
+        try {
         oldschoolRequest(request, response, netSocket, data)
           .then((internal_message) => {            
             // Assume all the writing/ending has been done
@@ -46,13 +47,17 @@ function RootServer() {
               request.end();
             }
           }).catch((err) => {
-            response.end();
+            // response.end();
           });
+        } catch (err) {
+          log('wat', err);
+        }
         return;
       }
 
       let isWebsocketHandshake = false;
       let isWebsocketData = netSocket.keepAliveInterval
+      log('foo', isWebsocketData, `${what(data)}`);
       if (isWebsocketData) {
         let { URI = [], method = [] } = data;
         let endpoint = URI.join('/');
@@ -68,4 +73,3 @@ const rootServer = RootServer();
 const files = new Files();
 const db = new Database();
 console.log(fg([25, 180, 222], 'boot'));
-

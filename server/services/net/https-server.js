@@ -146,28 +146,6 @@ function HttpsServer({
       nodeSocket,
       onData: function(request, response, netSocket, data) {
         let { headers, id, contentType, requests, remote } = nodeSocket;
-
-        // [info] Handled socket's initial data->onSocketData->[request/upgrade], now recv protos:
-        if (netSocket.keepAliveInterval && contentType.indexOf('proto.joeys.app') !== -1) {
-          let { URI = [], method = [], opCode } = data;
-          let endpoint = URI.join('/');
-          // [todo] Figure out like, listening method
-
-          // How do we handle initial connections - do this to keep it generic..?
-          // How would we update all our other connections though?.. hmm, I did this with Sock Users and stuff. I think? Or no..
-          // rootEmitter.emit(URI.join('/'), data, netSocket);
-
-          // This will be for handling URIs that we want the http-server to be able to talk to, e.g. a live chatroom
-          if (!websockets[URI.join('/')]) {
-            websockets[URI.join('/')] = [];
-          }
-          websockets[URI.join('/')].push(netSocket);
-          log(remote, 'onSocketData', `Registering rootEmitter.on(${URI.join('/')}) -> [${websockets[URI.join('/')].length}]`);
-        }
-
-        // [TODO] The parent RootServer is handling this:
-        // - salmon-log POSTS .. and
-        // - proto(osrs/salmon/log, [*]) to initially populate the view.
         onSocketData(request, response, netSocket, data);
       },
       onResume: onSocketResume,

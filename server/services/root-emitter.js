@@ -1,7 +1,8 @@
-// Global event system for safe shutdowns/restarts
+import process from 'node:process';
 import { EventEmitter } from 'node:events';
 import { log as _log, what, fg, bold } from '../../common/utils/index.mjs';
-// const log = () => {}; const what = () => {}; const fg = () => {}; const bold = () => {};
+
+let DEBUG = process.env.DEBUG;
 
 function RootEmitter(props = {}) {
   let { id = 'RootEmitter' } = props;
@@ -13,25 +14,24 @@ function RootEmitter(props = {}) {
     _id = 'RootEmitter';
     _log(_id, a, b, c, d, e, f);     
   };
-
   console.log('RootEmitter.init');
 
+  // When we send a sigint to the main process, our rootEmitter will hear
+  // that event and ensure that all listeners for `shutdown` are called
+  // before the base node process is actually killed.
+  // [IMPORTANT] You must always prepend your functions to the rootEmitter!
   let sigintString = fg([255, 50, 50], 'sigint');
   _emitter.on('shutdown', function shutdownCallbackListener(shutdownCallback) {
     log('shutdown', `${sigintString} -> [listeners()] -> ${bold('shutdownCallback()')}`);
     shutdownCallback();
   });
-  _emitter.on('uncaughtException', function(err) {
-    log('uncaughtException', `${what(err)}`);
-  });
-  // _emitter.on('osrs/salmon/log', function(proto, netSocket) {
-  //   log('osrs/salmon/log', `${what(proto)} ... [netsocket] ... Should this be registered in http-server/`);
-  // });
 
+  // Node process heard sigint, now we 
   process.once('SIGINT', function processInterrupt() {
     process.stdout.write('\n');
     log('node:process', `once(${sigintString})`);
 
+    // This is just pretty-logging all of the event listeners
     let eventName = 'shutdown';
     let eventNames = _emitter.eventNames();
     let l = eventNames.reduce((acc, e, idx) => {
@@ -47,8 +47,12 @@ function RootEmitter(props = {}) {
 
     _emitter.emit('shutdown', function handleRootShutdown(shutdownCallback) {
       log('node:process', 'shutdown', sigintString);
-      process.kill(process.pid, 'SIGINT'); 
+      process.kill(process.pid, 'SIGINT');
     });
+  });
+
+  _emitter.on('uncaughtException', function(err) {
+    log('uncaughtException', `${what(err)}`);
   });
 
   return _emitter;

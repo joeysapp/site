@@ -1,12 +1,13 @@
 import path from 'node:path';
 import fs from 'node:fs';
-
-import { Database } from '../index.js';
 import rootEmitter from '../root-emitter.js';
+import process from 'node:process';
+import { Database } from '../index.js';
+
 // [todo] In the future, multiple services at /osrs, e.g. a GE discord bot
 // import AchievementLogger from './achievement-logger';
 
-// Common utils/types
+// Types, utils
 import { Proto } from '../../../common/types/index.mjs';
 import { asFrame } from '../../../common/types/proto.mjs';
 import { log, fg, what, numToBytes, } from '../../../common/utils/index.mjs';
@@ -16,9 +17,9 @@ import { log, fg, what, numToBytes, } from '../../../common/utils/index.mjs';
 //   log ('osrs', 'osrs/salmon/log', 'Heard something. wat do?');
 // });
 
-const DEBUG = false;
+let DEBUG = process.env.DEBUG !== "0";
 
-// [todo] This will probably be handled with postgres later
+// [todo] This will probably be handled with postgres later?
 const SEEN_IDS = {};
 function shouldExcludeLog({ auth, chatName, chatType, id, message, rank, sender, timestamp }) {
   let exclude = false;
@@ -40,27 +41,42 @@ function shouldExcludeLog({ auth, chatName, chatType, id, message, rank, sender,
 };
 
 let db = new Database('db/oldschool');
-async function oldschoolInit(request, response, netSocket, data) {
-  // let { remote } = netSocket;
-  // log('osrs', 'init', 'sending out entire table');
+function oldschoolInit(request, response, netSocket, data) {
   let queryString = `select osrs_chat_auth, osrs_chat_timestamp, osrs_chat_entry from salmon_log order by osrs_chat_timestamp desc;`;
-  db.query({
-    text: queryString,
-  }).then(function({ rows, fields }) {
-    log('osrs', 'init', `-> [ ${rows.length} rows ]`);
+  // try {
+    db.query({
+      text: queryString,
+    }).then(function(res = {}) {
+      let { rows = [], fields = [] } = res;
+      log('osrs', 'init', `-> [ ${rows.length} rows ]`);
 
-    // Write out new SQL rows to connected frontend sockets
-    let eventName = ['osrs', 'salmon', 'log'].join('/');
-    let proto = new Proto({ 
-      opCode: 1,
-      method: ['update', 'add'],
-      URI: ['osrs', 'salmon', 'log'],
-      data: { rows, fields },
+      // Write out new SQL rows to connected frontend sockets
+      let eventName = ['osrs', 'salmon', 'log'].join('/');
+      let chunkSize = 10;
+      let idx = 0;
+      let streamingOut;
+      setTimeout(function() {
+        streamingOut = setInterval(() => {
+          let proto = new Proto({ 
+            opCode: 1,
+            method: ['update', 'add'],
+            URI: ['osrs', 'salmon', 'log'],
+            data: {
+              rows,
+              fields: fields.slice(idx, (idx+chunkSize)),
+            },
+          });
+          netSocket.write(asFrame(proto));
+          idx += chunkSize;
+          if (idx >= fields.length) {
+            clearInterval(streamingOut);
+          }
+        }, 50);
+      }, 100);
     });
-    setTimeout(() => {
-      netSocket.write(asFrame(proto));
-    }, 500);
-  });
+  // } catch(err) {
+  //   log('osrs', 'init', `db/error\n${err}`);
+  // }
 }
 
 // This will only be handling POSTS - the get to osrs.joeys.app/* will go to nginx
