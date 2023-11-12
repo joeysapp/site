@@ -32,7 +32,7 @@ let pool_config = {
   // [ref] https://www.postgresql.org/docs/9.5/datatype.html
   types: postgresOIDParser(pgTypes), 
 
-  max: 20,
+  max: 50,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 
@@ -153,62 +153,37 @@ export default function Database(settings = {}) {
     // log(id, 'error', err);
   });
   
-  // export const query = async ({ text, values=[], type='Number', opts={} }) => {
   let firstQuery = null;
-
   async function query({ text, values=[], type='number', doLog=true, rowMode='array' }) {
-    // return new Promise(async function(resolve, reject) {
-    // lo      let client, result;      
-    let client, result;      
+    let client, result;
     try {
       if (!firstQuery) {
         log('init');
         firstQuery = true;
       };
       info.queries += 1;
-      // try {
-        if (doLog) {
-          let s = text;
-          // s = s.substring(0, 30);
-          s += '..'; s = `${s.padEnd(32, ' ')}`;
-          s = fg([100, 100, 100], s); s += ` -> <${bold(type)}>`;
-          log('query()', s);
-        }
-
+      if (doLog) {
+        let s = text;
+        // s = s.substring(0, 30);
+        s += '..'; s = `${s.padEnd(32, ' ')}`;
+        s = fg([100, 100, 100], s); s += ` -> <${bold(type)}>`;
+        log('query()', s);
+      }
       log('query()', 'then', 'well what is then?');
       client = await pool.connect();
       result = await client.query({ text, values, rowMode });
+
+      // [todo] still need to figure out how exactly we're doing typing
+      // let typedRows = rows.map(r => getType({ type, data: r }));
+      // return rowMode === 'array' ? { rows, fields } : rows;
       let { rows = [], fields } = result;
       return result;
     } catch (err) {
-      return {
-        fields: [],
-        rows: [[err]],
-      };
+      // Return this but make sure it gets sent to the root/site status websocket?
+      return objectToPostgresPayload(err);
     } finally {
       if (client) client.release();
     }
-        // So this actually wasn't doing anything - still need to figure out how exactly we're doing typing
-        // let typedRows = rows.map(r => getType({ type, data: r }));
-        // console.log('fields', fields);
-        // console.log('rows[0]', rows[0]);
-        // return rowMode === 'array' ? { rows, fields } : rows;
-
-        // return typedRows;
-
-
-        // resolve(rowMode === 'array' ? { rows, fields } : rows);
-      // })
-      // } catch (err) {        
-      //   log('query()', 'error', `\n${what(err)}`);
-      //   reject(err);
-      //   let rows = [];
-        // reject(rowMode === 'array' ? { rows: [[err.message]], fields: [{ dataRowID: 1043, name: 'Error' }] } : rows);
-        // return rowMode === 'array' ? { rows: [[err.message]], fields: [{ dataRowID: 1043, name: 'Error' }] } : rows;        
-        // [todo] We could do a rollback if necessary: client.query('rollback');
-      // } finally {
-      //   if (client) client.release();
-      // }
   }
 
   async function hasTable(tableName) {
@@ -270,3 +245,15 @@ const cursorQuery = async ({ text, values=[], type='Number', opts={} }) => { }
 // const db = new Database();
 // export default db;
 
+// 2023-11-12T14: Temporary method of typing until we get our tables of objects figured out again
+function objectToPostgresPayload(object = {}) {
+  let fields = Object.keys(object).map((key, idx) => {
+    return {
+      name: key, tableID: 0, columnID: idx, dataTypeID: 1043, dataTypeSize: -1, dataTypeModifier: 68, format: 'text'
+    };
+  });
+  let row = Object.keys(object).reduce((row, key, idx) => {
+    return [...row, object[key]];
+  }, []);
+  return { fields, rows: [row] };
+}

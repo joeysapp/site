@@ -30,8 +30,8 @@ show_files();
 function RootServer() {
   let server = new HttpsServer({
     id: 'RootServer',
-    host: process.env.SITE_ADDRESS,
-    port: process.env.SITE_HTTPS_PORT,
+    host: process.env.root_host,
+    port: process.env.root_port,
 
     onSocketData: function(request, response, netSocket, data) {
       let { url, method, headers = {}} = request;
