@@ -4,20 +4,22 @@ Last updated 2023-11-12T1300Z
 # Features
 - [x] 2023-11-11: Improved panel ux on mobile/desktop (host views, z-indexing)
 - [x] 2023-11-11: Added `osrs/salmon-log` configuration info, simple gold sum
+- [x] 2023-11-12: HTTP1.1->HTTP2 for static files
 - [ ] Discord Gateway usage
 - [ ] Child subprocesses (hot-swappable in, e.g. single proc for sockets, sql)
 - [ ] Discord Gateway as child subprocess
-- [ ] Adding several new `salmon-log` tables and visuals
+- [ ] `salmon-log`: New tables, visuals (requires new protocol defns, objs/sql payloads)
 - [ ] "Remote procedure call" handler as subprocesses (e.g. machine running LLMs, Arduinos running plotter)
 - [ ] Simple "users" / generic method of allowing site interactions w/o auth (e.g. guestbook, settings)
 
 # Architecture
-- [ ] **[XL]** Clearly defined socket lifecycles (e.g. root event listeners, resumptions)
-- [ ] **[XL]** Clearly defined protocol use (e.g. URIs, streaming of SQL rows vs. utf-8 object strings)
-- [ ] Clearly defined .env files
+- [x] 2023-11-12: Clearly defined .env files
+- [ ] **[WIP]** Clearly defined socket lifecycles (e.g. root event listeners, resumptions)
+- [ ] **[WIP]** Clearly defined protocol use (e.g. URIs, streaming of SQL rows vs. utf-8 object strings)
 - [ ] Cleanup of NGINX configurations
 
 # Spikes
+- [x] Review HTTP1.1 vs HTTP2 for providing static files
 - [ ] Roadmap of `bots as a service` (mvp and requirements)
 - [ ] Review of web request/response communication best practices
 - [ ] Review of node EventListener best practices (e.g. rw/duplex streams, error handling)
@@ -28,11 +30,10 @@ Last updated 2023-11-12T1300Z
 - [x] 2023-11-11: Setting local dev environment back up (postgres, certs)
 - [x] 2023-11-11: Clearly define nginx static caching and error routing
 - [x] 2023-11-11: Clearly define webpack build pipeline
-- [ ] Server-side REPL for testing
-- [ ] Sync git submodules for local server and frontend dev
+- [ ] Server-side REPL for testing and push
+- [ ] Sync git submodule(s) for local and deploy
 - [ ] Handle simple HTTP1 erroring out (crash reports)
 - [ ] Handle HTTP1.1 sockets erroring out (e.g. try 5 times over 10 minutes / posting in crash reports)
-
 
 # Bugfixes
 - [x] 2023-11-10: Chrome and Android websocket issue
