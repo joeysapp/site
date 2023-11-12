@@ -23,10 +23,10 @@ import { what, log as _log, fg, bold } from '../../../common/utils/index.mjs';
 // import * as queries from './queries-javascript-functions.js';
 
 let pool_config = {
-  user: 'node_pool' || process.env.pg_user,
-  password: 'node_pool' || process.env.pg_password,
-  database: 'node_frontend_db' || process.env.pg_database,
-  port: 5432 || process.env.pg_port, 
+  user: process.env.pg_user,
+  password: process.env.pg_password,
+  database: process.env.pg_database,
+  port: process.env.pg_port, 
 
   // [ref] https://github.com/brianc/node-pg-types/blob/master/lib/textParsers.js#L138
   // [ref] https://www.postgresql.org/docs/9.5/datatype.html
@@ -169,16 +169,16 @@ export default function Database(settings = {}) {
       // try {
         if (doLog) {
           let s = text;
-          s = s.substring(0, 30);
+          // s = s.substring(0, 30);
           s += '..'; s = `${s.padEnd(32, ' ')}`;
           s = fg([100, 100, 100], s); s += ` -> <${bold(type)}>`;
           log('query()', s);
         }
 
-        log('query()', 'then', 'well what is then?');
-        client = await pool.connect();
-        result = await client.query({ text, values, rowMode });
-        let { rows = [], fields } = result;
+      log('query()', 'then', 'well what is then?');
+      client = await pool.connect();
+      result = await client.query({ text, values, rowMode });
+      let { rows = [], fields } = result;
       return result;
     } catch (err) {
       return {

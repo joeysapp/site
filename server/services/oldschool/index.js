@@ -62,17 +62,17 @@ function oldschoolInit(request, response, netSocket, data) {
             method: ['update', 'add'],
             URI: ['osrs', 'salmon', 'log'],
             data: {
-              rows,
-              fields: fields.slice(idx, (idx+chunkSize)),
+              fields,
+              rows: rows.slice(idx, (idx+chunkSize)),
             },
           });
           netSocket.write(asFrame(proto));
           idx += chunkSize;
-          if (idx >= fields.length) {
+          if (idx >= rows.length) {
             clearInterval(streamingOut);
           }
-        }, 50);
-      }, 100);
+        }, 25);
+      }, 10);
     });
   // } catch(err) {
   //   log('osrs', 'init', `db/error\n${err}`);
