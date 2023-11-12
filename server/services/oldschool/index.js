@@ -18,6 +18,7 @@ import { log, fg, what, numToBytes, } from '../../../common/utils/index.mjs';
 // });
 
 let DEBUG = process.env.DEBUG !== "0";
+// const DEBUG = true;
 
 // [todo] This will probably be handled with postgres later?
 const SEEN_IDS = {};

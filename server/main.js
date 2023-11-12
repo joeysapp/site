@@ -57,7 +57,6 @@ function RootServer() {
 
       let isWebsocketHandshake = false;
       let isWebsocketData = netSocket.keepAliveInterval
-      log('foo', isWebsocketData, `${what(data)}`);
       if (isWebsocketData) {
         let { URI = [], method = [] } = data;
         let endpoint = URI.join('/');

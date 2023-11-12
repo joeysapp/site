@@ -13,7 +13,7 @@ import rootEmitter from '../root-emitter.js';
 import { what, log as _log, bold, underline, fg, bg, numToBytes, msToTime } from '../../../common/utils/index.mjs';
 import Proto, { asFrame } from '../../../common/types/proto.mjs';
 
-const DEBUG = process.env.DEBUG || false;
+let DEBUG = process.env.DEBUG !== "0";
 const NETWORK_LAYERS = {
   application: '--', transport: 'tcp', internet: 'IPv4', link: 'MAC',
   remoteAddress: '', remotePort: '', localAddress: '', localPort: '',
@@ -29,9 +29,9 @@ let connections = {
 // .. Currently, this is a websockets[URI] = [...socket1, socket2]...
 // .. This should probably be like, endpoints.
 let websockets = {};
-let knownURIs = {
+let endpoints = {
   // `osrs/salmon/log`: [ socket... socket... ]
-
+  'osrs/salmon/log': [],
 };
 
 function doLog(request, response) {
@@ -73,7 +73,7 @@ let socketListeners = [
     eventName: ['osrs', 'salmon', 'log'].join('/'),
     method: function(proto) {
       log(remote, 'osrs/salmon/log', `nodeSocket heard event! This was added in http-server.on(upgrade)!`);
-      // nodeSocket.write(proto.asBuffer());
+      nodeSocket.write(proto.asBuffer());
     },
   },
   {
@@ -117,9 +117,11 @@ function HttpsServer({
   });
   log({}, 'init');
 
+  // This is listening for services/oldschool/index, receiving a POST that then writes out to known websockets here
   rootEmitter.on(['osrs', 'salmon', 'log'].join('/'), function(proto) {
     let endpoint = ['osrs', 'salmon', 'log'].join('/');
-    (websockets[endpoint] || []).forEach((netSocket, idx) => {
+    // (websockets[endpoint] || []).forEach((netSocket, idx) => {
+    endpoints[endpoint].forEach((netSocket, idx) => {
       let { remote } = netSocket;
       log(remote, 'https.rootEmitter', `netSocket[#${idx}] readyState=${netSocket.readyState} writable=${netSocket.writable}`);
       if (netSocket.readyState === 'writeOnly') {
@@ -260,6 +262,9 @@ function HttpsServer({
         log(remote, 'upgrade', `+ adding keepAliveInterval`);
         // if (nodeSocket.keepAliveInterval) return;
 
+        // Temporary fix
+        endpoints['osrs/salmon/log'].push(nodeSocket);
+
         let keepAliveInterval = setInterval(function() {
           let { readyState, lifespan, requests, bytesWritten, bytesRead } = nodeSocket;
           nodeSocket.lifespan += KEEPALIVE_INTERVAL;
@@ -281,39 +286,40 @@ function HttpsServer({
         }, KEEPALIVE_INTERVAL);
         nodeSocket.keepAliveInterval = keepAliveInterval;
 
+
+        // 2023-11-12T - I think this is the wrong way, we want a single rootEmitter with a pool of sockes, not adding listeners to every single socket
         // We will bind these listeners to connected websockets,
         // which our rootEmitter will emit when necessary, e.g.:
         // * https.on(request), POST salmon/log, emit that data to all connected sockets.
-        let socketListeners = [
-          {
-            // When we sigint the server, do this with the nodesocket. Probably ask it to refresh in 10-20s?
-            eventName: 'shutdown',
-            method: function() {
-              log(remote, 'sigint', '[todo] nodeSocket heard sigint.');
-            },
-          },
-          {
-            // POST osrs.joeys.app/salmon-log will save item and emit a proto
-            // containing sQL row(s) of new entries. The frontend will add to view.
-            eventName: ['osrs', 'salmon', 'log'].join('/'),
-            method: function(proto) {
-              log(remote, 'osrs/salmon/log', `nodeSocket heard event! This was added in http-server.on(upgrade)!`);
-              // nodeSocket.write(proto.asBuffer());
-            },
-          },
-          {
-            eventName: ['axidraw'].join('/'),
-            method: function(proto) {
-              // nodeSocket.write(proto.asBuffer());
-            }
-          }
-        ];
-        
-        socketListeners.forEach(l => {
-          let { eventName, method } = l;
-          log(remote, 'listeners', `+ Binding ${eventName} in http-server.on(upgrade)`);
-          rootEmitter.prependListener(eventName, (proto) => method(proto));
-        });
+        // let socketListeners = [
+        //   {
+        //     // When we sigint the server, do this with the nodesocket. Probably ask it to refresh in 10-20s?
+        //     eventName: 'shutdown',
+        //     method: function() {
+        //       log(remote, 'sigint', '[todo] nodeSocket heard sigint.');
+        //     },
+        //   },
+        //   {
+        //     // POST osrs.joeys.app/salmon-log will save item and emit a proto
+        //     // containing sQL row(s) of new entries. The frontend will add to view.
+        //     eventName: ['osrs', 'salmon', 'log'].join('/'),
+        //     method: function(proto) {
+        //       log(remote, 'osrs/salmon/log', `nodeSocket heard event! This was added in http-server.on(upgrade)!`);
+        //       // nodeSocket.write(proto.asBuffer());
+        //     },
+        //   },
+        //   {
+        //     eventName: ['axidraw'].join('/'),
+        //     method: function(proto) {
+        //       // nodeSocket.write(proto.asBuffer());
+        //     }
+        //   }
+        // ];        
+        // socketListeners.forEach(l => {
+        //   let { eventName, method } = l;
+        //   log(remote, 'listeners', `+ Binding ${eventName} in http-server.on(upgrade)`);
+        //   rootEmitter.prependListener(eventName, (proto) => method(proto));
+        // });
 
         // [todo] Connection pooling
       }).catch((error) => {

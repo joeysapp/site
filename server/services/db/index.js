@@ -158,9 +158,9 @@ export default function Database(settings = {}) {
 
   async function query({ text, values=[], type='number', doLog=true, rowMode='array' }) {
     // return new Promise(async function(resolve, reject) {
-    // log('query()');
+    // lo      let client, result;      
+    let client, result;      
     try {
-      let client, result;      
       if (!firstQuery) {
         log('init');
         firstQuery = true;
@@ -185,6 +185,8 @@ export default function Database(settings = {}) {
         fields: [],
         rows: [[err]],
       };
+    } finally {
+      if (client) client.release();
     }
         // So this actually wasn't doing anything - still need to figure out how exactly we're doing typing
         // let typedRows = rows.map(r => getType({ type, data: r }));
