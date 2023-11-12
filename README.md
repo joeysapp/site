@@ -38,3 +38,5 @@ Last updated 2023-11-12T1300Z
 - [x] 2023-11-10: Chrome and Android websocket issue
 - [x] 2023-11-11: Brave stale caching issue (fix: `no-store`)
 - [x] 2023-11-12: Safari and iOS websocket payload/rolling frame issue
+- [x] 2023-11-12: Postgres pool memory leak
+- [x] 2023-11-12: Temporary workaround for socket event listeners
