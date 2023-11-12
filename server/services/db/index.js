@@ -23,8 +23,8 @@ import { what, log as _log, fg, bold } from '../../../common/utils/index.mjs';
 // import * as queries from './queries-javascript-functions.js';
 
 let pool_config = {
-  user: 'node_pool' || process.env.pg_user, 
-  password: 'node_pool',
+  user: 'node_pool' || process.env.pg_user,
+  password: 'node_pool', || process.env.pg_password,
   database: 'node_frontend_db' || process.env.pg_database,
   port: 5432 || process.env.pg_port, 
 
