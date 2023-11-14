@@ -33,7 +33,6 @@ show_files();
 let endpoints = {
   'osrs/salmon/log': [],
 };
-
 function writeLogToSockets(proto) {
   let endpoint = ['osrs', 'salmon', 'log'].join('/');
   endpoints[endpoint].forEach((netSocket, idx) => {
@@ -129,7 +128,6 @@ function ProtoServer() {
       nodeSocket.on('osrs/salmon/log', function(proto) {
         log('main/nodeSocket', 'heard osrs salmon og');
       });
-
       let KEEPALIVE_INTERVAL = 55000;
       let keepAliveInterval = setInterval(function() {
         let { readyState, lifespan, requests, bytesWritten, bytesRead, remote } = nodeSocket;
