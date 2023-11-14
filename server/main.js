@@ -132,7 +132,7 @@ function ProtoServer() {
         ...socketRemote,
       };
 
-      log(layers, 'rootServer', `upgrade`, ` + adding keepAliveInterval`);
+      log(layers, 'main.js', `upgrade`, ` + adding keepAliveInterval`);
       // if (nodeSocket.keepAliveInterval) return;
       // onUpgrade(request, nodeSocket, head);
 
