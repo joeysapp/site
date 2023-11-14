@@ -1,14 +1,16 @@
 # site / joeys.app
-Last updated 2023-11-12T1300Z
+Last updated 2023-11-14T0300Z
 
 # Features
 - [x] 2023-11-11: Improved panel ux on mobile/desktop (host views, z-indexing)
 - [x] 2023-11-11: Added `osrs/salmon-log` configuration info, simple gold sum
 - [x] 2023-11-12: HTTP1.1->HTTP2 for static files
+- [x] 2023-11-12: `salmon-log`: New tables in backend
+- [x] 2023-11-13: Improved server-to-frontend message handling (template for e.g. REPL commands)
 - [ ] Discord Gateway usage
 - [ ] Child subprocesses (hot-swappable in, e.g. single proc for sockets, sql)
 - [ ] Discord Gateway as child subprocess
-- [ ] `salmon-log`: New tables, visuals (requires new protocol defns, objs/sql payloads)
+- [ ] `salmon-log`: New visuals (requires new protocol defns, objs/sql payloads)
 - [ ] "Remote procedure call" handler as subprocesses (e.g. machine running LLMs, Arduinos running plotter)
 - [ ] Simple "users" / generic method of allowing site interactions w/o auth (e.g. guestbook, settings)
 
@@ -20,9 +22,9 @@ Last updated 2023-11-12T1300Z
 
 # Spikes
 - [x] Review HTTP1.1 vs HTTP2 for providing static files
+- [x] Review of node EventListener best practices (e.g. rw/duplex streams, error handling)
 - [ ] Roadmap of `bots as a service` (mvp and requirements)
 - [ ] Review of web request/response communication best practices
-- [ ] Review of node EventListener best practices (e.g. rw/duplex streams, error handling)
 
 # Tooling
 - [x] 2023-11-10: Basic server/build "hot reloading" functionality
@@ -30,6 +32,10 @@ Last updated 2023-11-12T1300Z
 - [x] 2023-11-11: Setting local dev environment back up (postgres, certs)
 - [x] 2023-11-11: Clearly define nginx static caching and error routing
 - [x] 2023-11-11: Clearly define webpack build pipeline
+- [x] 2023-11-13: SQL sync scripts between prod/local
+- [x] 2023-11-13: Consolidated session logic to single location
+- [x] 2023-11-13: Clearly define environment files
+- [x] 2023-11-13: Deployment process roughly defined & executed w/ ~5min downtime
 - [ ] Server-side REPL for testing and push
 - [ ] Sync git submodule(s) for local and deploy
 - [ ] Handle simple HTTP1 erroring out (crash reports)
