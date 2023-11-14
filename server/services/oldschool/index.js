@@ -4,6 +4,8 @@ import rootEmitter from '../root-emitter.js';
 import process from 'node:process';
 import { Database } from '../index.js';
 
+import { EventEmitter } from 'node:events';
+
 // [todo] In the future, multiple services at /osrs, e.g. a GE discord bot
 // import AchievementLogger from './achievement-logger';
 
@@ -16,9 +18,12 @@ import { log, fg, what, numToBytes, } from '../../../common/utils/index.mjs';
 // rootEmitter.on(['osrs', 'salmon', 'log'].join('/'), function (proto, netSocket) {
 //   log ('osrs', 'osrs/salmon/log', 'Heard something. wat do?');
 // });
+let osrsEmitter = new EventEmitter();
+osrsEmitter.on('osrs/salmon/log', function(proto) {
+  console.log('so foncufs');
+});
 
-let DEBUG = process.env.DEBUG !== "0";
-// const DEBUG = true;
+let DEBUG = process.env.DEBUG;
 
 // [todo] This will probably be handled with postgres later?
 const SEEN_IDS = {};
@@ -52,6 +57,8 @@ function oldschoolInit(request, response, netSocket, data) {
       log('osrs', 'init', `-> [ ${rows.length} rows ]`);
 
       // Write out new SQL rows to connected frontend sockets
+      let INITIAL_DELAY = 50;
+      let CHUNK_DELAY = 25;
       let eventName = ['osrs', 'salmon', 'log'].join('/');
       let chunkSize = 10;
       let idx = 0;
@@ -72,12 +79,9 @@ function oldschoolInit(request, response, netSocket, data) {
           if (idx >= rows.length) {
             clearInterval(streamingOut);
           }
-        }, 25);
-      }, 10);
+        }, CHUNK_DELAY);
+      }, INITIAL_DELAY);
     });
-  // } catch(err) {
-  //   log('osrs', 'init', `db/error\n${err}`);
-  // }
 }
 
 // This will only be handling POSTS - the get to osrs.joeys.app/* will go to nginx
@@ -144,7 +148,8 @@ async function oldschoolRequest(request, response, netSocket, data) {
           URI: ['osrs', 'salmon', 'log'],
           data: { rows, fields },
         });
-        rootEmitter.emit(eventName, proto);
+        osrsEmitter.emit(eventName, proto);
+        rootEmitter.emit(eventName, proto);        
       });
     }
     return;   
