@@ -23,7 +23,7 @@ osrsEmitter.on('osrs/salmon/log', function(proto) {
   console.log('so foncufs');
 });
 
-let DEBUG = process.env.DEBUG;
+let DEBUG = process.env.DEBUG !== "0";
 
 // [todo] This will probably be handled with postgres later?
 const SEEN_IDS = {};

@@ -169,7 +169,7 @@ export default function Database(settings = {}) {
         s = fg([100, 100, 100], s); s += ` -> <${bold(type)}>`;
         log('query()', s);
       }
-      log('query()', 'then', 'well what is then?');
+
       client = await pool.connect();
       result = await client.query({ text, values, rowMode });
 

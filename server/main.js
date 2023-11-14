@@ -33,17 +33,32 @@ show_files();
 let endpoints = {
   'osrs/salmon/log': [],
 };
+
+// [todo] think about memory leaks
+let layers = {
+  application: '--', transport: 'tcp', internet: 'IPv4', link: 'MAC',        
+  localAddress: process.env.root_host,
+  localPort: process.env.root_port,
+  // internet: remoteAddress ? remoteFamily : 'ipv4?',
+};
+
 function writeLogToSockets(proto) {
   let endpoint = ['osrs', 'salmon', 'log'].join('/');
   endpoints[endpoint].forEach((netSocket, idx) => {
-    let { remote } = netSocket;
-    log(remote, 'https.rootEmitter', `netSocket[#${idx}] readyState=${netSocket.readyState} writable=${netSocket.writable}`);
+    let { remote: socketRemote } = netSocket;
+    let { remoteAddress, remotePort, remoteFamily } = socketRemote;
+
+    let remote = {
+      ...socketRemote,
+      ...layers,
+    };
+    log(remote, 'main.js', `netSocket[#${idx}] readyState=${netSocket.readyState} writable=${netSocket.writable}`);
     if (netSocket.readyState === 'writeOnly') {
-      log({}, 'https.rootEmitter', '... not sure?');
+      log({}, 'main.js', '... not sure?');
     } else if (netSocket.readyState === 'open') {
       netSocket.cork();
       netSocket.write(asFrame(proto), 'buffer', function callback(foo) {
-        log(remote, 'https.rootEmitter', 'Wrote out to netSocket');
+        log(remote, 'main.js', 'Wrote out to netSocket');
       });
       netSocket.uncork();
     }
@@ -59,13 +74,13 @@ osrsListener.on('osrs/salmon/log', function(proto) {
 
 // THIS FIRES.
 rootEmitter.on('osrs/salmon/log', function(proto) {
-  log('rootEmitter', 'now writing out to endpoints');
+  // log('rootEmitter', 'now writing out to endpoints');
   writeLogToSockets(proto);
 });
 
 function ProtoServer() {
   let server = new HttpsServer({
-    id: 'protoServer',
+    // id: 'protoServer',
     host: process.env.root_host,
     port: process.env.root_port,
 
@@ -124,17 +139,18 @@ function ProtoServer() {
       // Temporary fix
       endpoints['osrs/salmon/log'].push(nodeSocket);
 
-      // DOES NOT FIRE.
+      // This... only fires on mount I think.. cause the frontend also sends us this, and we loop around
       nodeSocket.on('osrs/salmon/log', function(proto) {
-        log('main/nodeSocket', 'heard osrs salmon og');
+        // log('main/nodeSocket', 'heard osrs salmon og');
       });
+
+
       let KEEPALIVE_INTERVAL = 55000;
       let keepAliveInterval = setInterval(function() {
         let { readyState, lifespan, requests, bytesWritten, bytesRead, remote } = nodeSocket;
-        nodeSocket.lifespan += KEEPALIVE_INTERVAL;
-
         if (nodeSocket.readyState === 'open') {
-          let lifespanString = `${msToTime(nodeSocket.lifespan)}`;
+          let { s, m, h, d } = msToTime(lifespan, { type: 'object' });
+          let lifespanString = `${h}:${m}:${s}`;
           log(layers, `keepAlive`, `${lifespanString} [${numToBytes(bytesWritten)} tx, ${numToBytes(bytesRead)} rx]`);
           let proto = new Proto({
             URI: ['portal', 'keepalive'],
@@ -143,7 +159,9 @@ function ProtoServer() {
             data: {},
           });
           nodeSocket.cork();
-          nodeSocket.write(asFrame(proto), 'binary', function(cb) { });
+          nodeSocket.write(asFrame(proto), 'binary', function(cb) {
+            nodeSocket.lifespan = nodeSocket.lifespan + KEEPALIVE_INTERVAL;
+          });
           nodeSocket.uncork();
         } else if (nodeSocket.readyState === 'writeOnly') {
           log(layers, `keepalive`, '[todo] This socket should have been removed from connection pool and its interval cleared on .end/close.');
